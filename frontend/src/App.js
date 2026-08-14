@@ -943,25 +943,32 @@ return (
                 : "Suggested Action"} :
             </b>
 
-            {
-              item.issue === "pothole"
-                ? (
-                  kannada
-                    ? " ರಸ್ತೆ ನಿರ್ವಹಣೆ ಅಗತ್ಯ"
-                    : " Road Maintenance Required"
-                )
-                : item.issue === "garbage"
-                ? (
-                  kannada
-                    ? " ತ್ಯಾಜ್ಯ ಸಂಗ್ರಹಣೆ ಅಗತ್ಯ"
-                    : " Waste Collection Required"
-                )
-                : (
-                  kannada
-                    ? " ನೀರು ಸರಬರಾಜು ಇಲಾಖೆಯ ಪರಿಶೀಲನೆ ಅಗತ್ಯ"
-                    : " Water Supply Department Required"
-                )
-            }
+            
+           {
+  item.issue === "pothole"
+    ? (
+        kannada
+          ? " ರಸ್ತೆ ನಿರ್ವಹಣೆ ಅಗತ್ಯ"
+          : " Road Maintenance Required"
+      )
+    : item.issue === "garbage"
+    ? (
+        kannada
+          ? " ತ್ಯಾಜ್ಯ ಸಂಗ್ರಹಣೆ ಅಗತ್ಯ"
+          : " Waste Collection Required"
+      )
+    : item.issue === "water leakage"
+    ? (
+        kannada
+          ? " ನೀರು ಸರಬರಾಜು ಇಲಾಖೆಯ ಪರಿಶೀಲನೆ ಅಗತ್ಯ"
+          : " Water Supply Department Required"
+      )
+    : (
+        kannada
+          ? " ಯಾವುದೇ ಕ್ರಮ ಅಗತ್ಯವಿಲ್ಲ"
+          : " No action required"
+      )
+}
 
           </p>
 
