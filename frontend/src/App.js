@@ -313,10 +313,6 @@ const updateComplaintStatus = (index, newStatus) => {
 
 }, []);
  const downloadReport = async (item) => {
-
-  const kannada =
-    kannada;
-
   const report = document.createElement("div");
 
   report.style.position = "fixed";
@@ -525,9 +521,17 @@ const updateComplaintStatus = (index, newStatus) => {
         pageHeight - margin * 2;
     }
 
-    pdf.save(
-      `CivicEye_Report_${item.issue}.pdf`
-    );
+    const pdfBlob = pdf.output("blob");
+const downloadUrl = URL.createObjectURL(pdfBlob);
+
+const link = document.createElement("a");
+link.href = downloadUrl;
+link.download = `CivicEye_Report_${item.issue || "Detection"}.pdf`;
+document.body.appendChild(link);
+link.click();
+document.body.removeChild(link);
+
+URL.revokeObjectURL(downloadUrl);
 
   } catch (error) {
 
