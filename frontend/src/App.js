@@ -10,6 +10,7 @@ import UploadSection from "./components/UploadSection";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import Settings from "./components/Settings";
+const API_BASE_URL = "https://civiceye-ai-bmgu.onrender.com";
 import History from "./components/History";
 function App() {
 
@@ -123,7 +124,7 @@ function App() {
     try {
 setLoading(true);
       const response = await fetch(
-        "http://127.0.0.1:5000/detect",
+        API_BASE_URL + "/detect",
         {
           method: "POST",
           body: formData
@@ -201,7 +202,7 @@ setLoading(false);
 
         const response = await fetch(
 
-          "http://127.0.0.1:5000/detect",
+          API_BASE_URL + "/detect",
 
           {
             method: "POST",
@@ -262,7 +263,7 @@ const updateComplaintStatus = (index, newStatus) => {
 
       const response =
         await fetch(
-          "http://127.0.0.1:5000/history"
+          API_BASE_URL + "/history"
         );
 
       const data = await response.json();
