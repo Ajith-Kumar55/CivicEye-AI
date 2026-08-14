@@ -10,8 +10,10 @@ import UploadSection from "./components/UploadSection";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import Settings from "./components/Settings";
-const API_BASE_URL = "https://civiceye-ai-bmgu.onrender.com";
 import History from "./components/History";
+
+const API_BASE_URL = "https://civiceye-ai-bmgu.onrender.com";
+
 function App() {
 
   // ======================
