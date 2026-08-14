@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 
 import {
   FaHome,
@@ -13,19 +13,62 @@ import {
 
 function Sidebar() {
 
+  const [language, setLanguage] = useState(
+    localStorage.getItem("civiceye_language") || "English"
+  );
+
+  const kannada = language === "Kannada";
+
+
+  useEffect(() => {
+
+    const handleLanguageChange = () => {
+
+      setLanguage(
+        localStorage.getItem("civiceye_language") || "English"
+      );
+
+    };
+
+
+    window.addEventListener(
+      "civiceye-language-change",
+      handleLanguageChange
+    );
+
+
+    return () => {
+
+      window.removeEventListener(
+        "civiceye-language-change",
+        handleLanguageChange
+      );
+
+    };
+
+  }, []);
+
+
   const scrollToSection = (id) => {
 
     const section =
       document.getElementById(id);
 
     if (!section) {
+
       console.log("Section not found:", id);
+
       return;
+
     }
 
+
     section.scrollIntoView({
+
       behavior: "smooth",
+
       block: "start"
+
     });
 
   };
@@ -34,7 +77,9 @@ function Sidebar() {
   return (
 
     <div
+
       style={{
+
         width: "240px",
 
         height: "100vh",
@@ -59,83 +104,148 @@ function Sidebar() {
           "2px solid #1f2937",
 
         zIndex: 1000
+
       }}
+
     >
 
       <h2
+
         style={{
+
           textAlign: "center",
 
           color: "#06b6d4",
 
           marginBottom: "35px"
+
         }}
+
       >
+
         🌍 CivicEye AI
+
       </h2>
 
 
       <Menu
+
         icon={<FaHome />}
-        text="Dashboard"
+
+        text={
+          kannada
+            ? "ಡ್ಯಾಶ್‌ಬೋರ್ಡ್"
+            : "Dashboard"
+        }
+
         onClick={() =>
           scrollToSection("dashboard")
         }
+
       />
 
 
       <Menu
+
         icon={<FaUpload />}
-        text="Upload Image"
+
+        text={
+          kannada
+            ? "ಚಿತ್ರ ಅಪ್‌ಲೋಡ್"
+            : "Upload Image"
+        }
+
         onClick={() =>
           scrollToSection("upload")
         }
+
       />
 
 
       <Menu
+
         icon={<FaCamera />}
-        text="Live Camera"
+
+        text={
+          kannada
+            ? "ಲೈವ್ ಕ್ಯಾಮೆರಾ"
+            : "Live Camera"
+        }
+
         onClick={() =>
           scrollToSection("camera")
         }
+
       />
 
 
       <Menu
+
         icon={<FaClipboardList />}
-        text="Complaint"
+
+        text={
+          kannada
+            ? "ದೂರು"
+            : "Complaint"
+        }
+
         onClick={() =>
           scrollToSection("complaint")
         }
+
       />
 
 
       <Menu
+
         icon={<FaChartBar />}
-        text="Analytics"
+
+        text={
+          kannada
+            ? "ವಿಶ್ಲೇಷಣೆ"
+            : "Analytics"
+        }
+
         onClick={() =>
           scrollToSection("analytics")
         }
+
       />
 
 
       <Menu
+
         icon={<FaHistory />}
-        text="History"
+
+        text={
+          kannada
+            ? "ಇತಿಹಾಸ"
+            : "History"
+        }
+
         onClick={() =>
           scrollToSection("history")
         }
+
       />
 
 
       <Menu
+
         icon={<FaMapMarkedAlt />}
-        text="Google Map"
+
+        text={
+          kannada
+            ? "ಗೂಗಲ್ ನಕ್ಷೆ"
+            : "Google Map"
+        }
+
         onClick={() =>
           scrollToSection("complaint")
         }
+
       />
+
 
     </div>
 
@@ -145,9 +255,13 @@ function Sidebar() {
 
 
 function Menu({
+
   icon,
+
   text,
+
   onClick
+
 }) {
 
   return (
@@ -157,6 +271,7 @@ function Menu({
       onClick={onClick}
 
       style={{
+
         display: "flex",
 
         alignItems: "center",
@@ -174,6 +289,7 @@ function Menu({
         cursor: "pointer",
 
         transition: "0.3s"
+
       }}
 
       onMouseEnter={(e) => {
@@ -193,25 +309,38 @@ function Menu({
     >
 
       <span
+
         style={{
+
           color: "#06b6d4",
 
           fontSize: "20px"
+
         }}
+
       >
+
         {icon}
+
       </span>
 
 
       <span
+
         style={{
+
           fontSize: "16px",
 
           fontWeight: "500"
+
         }}
+
       >
+
         {text}
+
       </span>
+
 
     </div>
 

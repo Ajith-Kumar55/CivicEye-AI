@@ -12,7 +12,7 @@ import html2canvas from "html2canvas";
 import Settings from "./components/Settings";
 import History from "./components/History";
 
-const API_BASE_URL = "https://civiceye-ai-bmgu.onrender.com";
+const API_BASE_URL = "http://127.0.0.1:5000";
 
 function App() {
 
@@ -39,6 +39,11 @@ function App() {
   const [showLanding, setShowLanding] = useState(true);
   const [userRole, setUserRole] = useState("");
   const [citizenView, setCitizenView] = useState("home");
+  const [language, setLanguage] = useState(
+  localStorage.getItem("civiceye_language") || "English"
+);
+
+const kannada = language === "Kannada";
 
   // ======================
   // START CAMERA
@@ -282,21 +287,35 @@ const updateComplaintStatus = (index, newStatus) => {
 
   };
 
-  useEffect(() => {
+ useEffect(() => {
 
-    fetchHistory();
+  fetchHistory();
 
-    return () => {
+  const handleLanguageChange = () => {
+    setLanguage(
+      localStorage.getItem("civiceye_language") || "English"
+    );
+  };
 
-      stopCamera();
+  window.addEventListener(
+    "civiceye-language-change",
+    handleLanguageChange
+  );
 
-    };
+  return () => {
+    stopCamera();
 
-  }, []);
+    window.removeEventListener(
+      "civiceye-language-change",
+      handleLanguageChange
+    );
+  };
+
+}, []);
  const downloadReport = async (item) => {
 
   const kannada =
-    localStorage.getItem("civiceye_language") === "Kannada";
+    kannada;
 
   const report = document.createElement("div");
 
@@ -651,7 +670,7 @@ return (
     }}
   >
     📷{" "}
-    {localStorage.getItem("civiceye_language") === "Kannada"
+    {kannada
       ? "ಲೈವ್ ಕ್ಯಾಮೆರಾ ಪತ್ತೆ"
       : "Live Camera Detection"}
   </h2>
@@ -709,7 +728,7 @@ return (
       onClick={startCamera}
     >
       ▶{" "}
-      {localStorage.getItem("civiceye_language") === "Kannada"
+      {kannada
         ? "ಕ್ಯಾಮೆರಾ ಪ್ರಾರಂಭಿಸಿ"
         : "Start Camera"}
     </button>
@@ -729,7 +748,7 @@ return (
       onClick={stopCamera}
     >
       ⏹{" "}
-      {localStorage.getItem("civiceye_language") === "Kannada"
+      {kannada
         ? "ಕ್ಯಾಮೆರಾ ನಿಲ್ಲಿಸಿ"
         : "Stop Camera"}
     </button>
@@ -749,7 +768,7 @@ return (
       onClick={captureImage}
     >
       📸{" "}
-      {localStorage.getItem("civiceye_language") === "Kannada"
+      {kannada
         ? "ಸೆರೆಹಿಡಿದು ಪತ್ತೆಹಚ್ಚಿ"
         : "Capture & Detect"}
     </button>
@@ -793,7 +812,7 @@ return (
     }}
   >
     📄{" "}
-    {localStorage.getItem("civiceye_language") === "Kannada"
+    {kannada
       ? "CivicEye AI ಪತ್ತೆ ವರದಿ"
       : "CivicEye AI Detection Report"}
   </h2>
@@ -810,7 +829,7 @@ return (
         }}
       >
         {
-          localStorage.getItem("civiceye_language") === "Kannada"
+          kannada
             ? "ಇನ್ನೂ ಯಾವುದೇ ಪತ್ತೆಯಾಗಿಲ್ಲ"
             : "No Detection Yet"
         }
@@ -840,7 +859,7 @@ return (
             }}
           >
             🛰{" "}
-            {localStorage.getItem("civiceye_language") === "Kannada"
+            {kannada
               ? "CivicEye AI ವರದಿ"
               : "CivicEye AI Report"}
           </h2>
@@ -854,7 +873,7 @@ return (
           <p>
             <b>
               📌{" "}
-              {localStorage.getItem("civiceye_language") === "Kannada"
+              {kannada
                 ? "ಸಮಸ್ಯೆ"
                 : "Issue"} :
             </b>{" "}
@@ -864,7 +883,7 @@ return (
           <p>
             <b>
               🎯{" "}
-              {localStorage.getItem("civiceye_language") === "Kannada"
+              {kannada
                 ? "ವಿಶ್ವಾಸಾರ್ಹತೆ"
                 : "Confidence"} :
             </b>{" "}
@@ -874,7 +893,7 @@ return (
           <p>
             <b>
               🚨{" "}
-              {localStorage.getItem("civiceye_language") === "Kannada"
+              {kannada
                 ? "ತೀವ್ರತೆ"
                 : "Severity"} :
             </b>{" "}
@@ -884,7 +903,7 @@ return (
           <p>
             <b>
               📍{" "}
-              {localStorage.getItem("civiceye_language") === "Kannada"
+              {kannada
                 ? "ಸ್ಥಿತಿ"
                 : "Status"} :
             </b>{" "}
@@ -894,7 +913,7 @@ return (
           <p>
             <b>
               📅{" "}
-              {localStorage.getItem("civiceye_language") === "Kannada"
+              {kannada
                 ? "ದಿನಾಂಕ"
                 : "Date"} :
             </b>{" "}
@@ -904,7 +923,7 @@ return (
           <p>
             <b>
               🕒{" "}
-              {localStorage.getItem("civiceye_language") === "Kannada"
+              {kannada
                 ? "ಸಮಯ"
                 : "Time"} :
             </b>{" "}
@@ -915,7 +934,7 @@ return (
 
             <b>
               💡{" "}
-              {localStorage.getItem("civiceye_language") === "Kannada"
+              {kannada
                 ? "ಸೂಚಿಸಲಾದ ಕ್ರಮ"
                 : "Suggested Action"} :
             </b>
@@ -923,18 +942,18 @@ return (
             {
               item.issue === "pothole"
                 ? (
-                  localStorage.getItem("civiceye_language") === "Kannada"
+                  kannada
                     ? " ರಸ್ತೆ ನಿರ್ವಹಣೆ ಅಗತ್ಯ"
                     : " Road Maintenance Required"
                 )
                 : item.issue === "garbage"
                 ? (
-                  localStorage.getItem("civiceye_language") === "Kannada"
+                  kannada
                     ? " ತ್ಯಾಜ್ಯ ಸಂಗ್ರಹಣೆ ಅಗತ್ಯ"
                     : " Waste Collection Required"
                 )
                 : (
-                  localStorage.getItem("civiceye_language") === "Kannada"
+                  kannada
                     ? " ನೀರು ಸರಬರಾಜು ಇಲಾಖೆಯ ಪರಿಶೀಲನೆ ಅಗತ್ಯ"
                     : " Water Supply Department Required"
                 )
@@ -956,7 +975,7 @@ return (
             }}
           >
             📄{" "}
-            {localStorage.getItem("civiceye_language") === "Kannada"
+            {kannada
               ? "PDF ವರದಿಯನ್ನು ಡೌನ್‌ಲೋಡ್ ಮಾಡಿ"
               : "Download PDF Report"}
           </button>
