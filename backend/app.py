@@ -83,12 +83,13 @@ def detect():
         # -------------------------
 
         results = model.predict(
-            source=filepath,
-            save=True,
-            project=PREDICT_FOLDER,
-            name="result",
-            exist_ok=True
-        )
+    source=filepath,
+    save=True,
+    project=PREDICT_FOLDER,
+    name="result",
+    exist_ok=True,
+    conf=0.60
+)
 
 
         detections = []
