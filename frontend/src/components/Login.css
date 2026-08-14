@@ -1,0 +1,468 @@
+/* ===========================
+   CivicEye AI Login
+=========================== */
+
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+    font-family:"Segoe UI",sans-serif;
+}
+
+body{
+    background:#081b3a;
+}
+
+.login-container{
+    width:100%;
+    min-height:100vh;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    padding:40px;
+    background:linear-gradient(135deg,#0b1d45,#154b8b,#10b8e8);
+}
+
+.login-card{
+
+    width:620px;
+
+    background:#fff;
+
+    border-radius:22px;
+
+    padding:45px;
+
+    box-shadow:0 20px 60px rgba(0,0,0,.35);
+
+}
+
+.login-card h1{
+
+    text-align:center;
+
+    font-size:42px;
+
+    color:#0f172a;
+
+    font-weight:700;
+
+    margin-bottom:10px;
+
+}
+
+.subtitle{
+
+    text-align:center;
+
+    color:#64748b;
+
+    font-size:18px;
+
+    margin-bottom:35px;
+
+    line-height:28px;
+
+}
+
+.tab-buttons{
+
+    display:flex;
+
+    margin-bottom:30px;
+
+    border-radius:12px;
+
+    overflow:hidden;
+
+    border:2px solid #d9e4ef;
+
+}
+
+.tab-buttons button{
+
+    flex:1;
+
+    border:none;
+
+    background:#f3f6fb;
+
+    padding:18px;
+
+    font-size:18px;
+
+    font-weight:600;
+
+    cursor:pointer;
+
+    transition:.3s;
+
+}
+
+.tab-buttons button:hover{
+
+    background:#dff5fb;
+
+}
+
+.tab-buttons .active{
+
+    background:#11b7e8;
+
+    color:#fff;
+
+}
+/* ===========================
+   INPUT FIELDS
+=========================== */
+
+.input-group{
+    margin-bottom:22px;
+}
+
+.input-group input,
+.password-box input{
+
+    width:100%;
+    height:60px;
+
+    border:2px solid #d9e4ef;
+
+    border-radius:12px;
+
+    padding:0 18px;
+
+    font-size:17px;
+
+    outline:none;
+
+    transition:.3s;
+
+}
+
+.input-group input:focus,
+.password-box input:focus{
+
+    border-color:#11b7e8;
+
+    box-shadow:0 0 10px rgba(17,183,232,.25);
+
+}
+
+/* ===========================
+   PASSWORD BOX
+=========================== */
+
+.password-box{
+
+    position:relative;
+
+    margin-bottom:22px;
+
+}
+
+.password-box input{
+
+    padding-right:90px;
+
+}
+
+.show-btn{
+
+    position:absolute;
+
+    right:15px;
+
+    top:50%;
+
+    transform:translateY(-50%);
+
+    background:none;
+
+    border:none;
+
+    color:#11b7e8;
+
+    font-size:15px;
+
+    font-weight:600;
+
+    cursor:pointer;
+
+}
+
+/* ===========================
+   REMEMBER ME
+=========================== */
+
+.options{
+
+    display:flex;
+
+    justify-content:space-between;
+
+    align-items:center;
+
+    margin-bottom:28px;
+
+    font-size:15px;
+
+}
+
+.options label{
+
+    display:flex;
+
+    align-items:center;
+
+    gap:8px;
+
+    color:#475569;
+
+}
+
+.options input{
+
+    width:18px;
+
+    height:18px;
+
+}
+
+.forgot{
+
+    color:#11b7e8;
+
+    font-weight:600;
+
+    cursor:pointer;
+
+}
+
+.forgot:hover{
+
+    text-decoration:underline;
+
+}
+
+/* ===========================
+   LOGIN BUTTON
+=========================== */
+
+.main-btn{
+
+    width:100%;
+
+    height:60px;
+
+    border:none;
+
+    border-radius:12px;
+
+    background:#11b7e8;
+
+    color:white;
+
+    font-size:20px;
+
+    font-weight:700;
+
+    cursor:pointer;
+
+    transition:.3s;
+
+}
+
+.main-btn:hover{
+
+    background:#0c9dc8;
+
+    transform:translateY(-2px);
+
+}
+/* ===========================
+   DEMO ADMIN BOX
+=========================== */
+
+.admin-box{
+
+    margin-top:30px;
+
+    padding:20px;
+
+    border:2px solid #dbeafe;
+
+    background:#f8fbff;
+
+    border-radius:14px;
+
+    text-align:center;
+
+    color:#475569;
+
+    font-size:15px;
+
+    line-height:28px;
+
+}
+
+.admin-box strong{
+
+    display:block;
+
+    color:#0f172a;
+
+    font-size:18px;
+
+    margin-bottom:8px;
+
+}
+
+/* ===========================
+   LOGIN LINK
+=========================== */
+
+.login-link{
+
+    margin-top:25px;
+
+    text-align:center;
+
+    font-size:16px;
+
+    color:#64748b;
+
+}
+
+.login-link span{
+
+    color:#11b7e8;
+
+    font-weight:700;
+
+    cursor:pointer;
+
+}
+
+.login-link span:hover{
+
+    text-decoration:underline;
+
+}
+
+/* ===========================
+   INPUT FOCUS
+=========================== */
+
+input:focus{
+
+    outline:none;
+
+    border-color:#11b7e8;
+
+    box-shadow:0 0 12px rgba(17,183,232,.25);
+
+}
+
+/* ===========================
+   ANIMATION
+=========================== */
+
+.login-card{
+
+    animation:fadeUp .6s ease;
+
+}
+
+@keyframes fadeUp{
+
+    from{
+
+        opacity:0;
+
+        transform:translateY(40px);
+
+    }
+
+    to{
+
+        opacity:1;
+
+        transform:translateY(0);
+
+    }
+
+}
+
+/* ===========================
+   MOBILE
+=========================== */
+
+@media(max-width:768px){
+
+.login-container{
+    width:100%;
+    min-height:100vh;
+
+    display:flex;
+
+    justify-content:center;
+
+    align-items:center;
+
+    background:linear-gradient(135deg,#0b1d45,#154b8b,#10b8e8);
+
+    padding:60px;
+}
+.login-card{
+    background:red !important;
+    width:1000px !important;
+    height:700px !important;
+}
+
+.login-card h1{
+    font-size:50px;
+    text-align:center;
+    margin-bottom:15px;
+}
+
+.subtitle{
+    font-size:22px;
+    text-align:center;
+    margin-bottom:40px;
+}
+
+.tab-buttons button{
+
+    font-size:16px;
+
+    padding:15px;
+
+}
+
+.input-group input,
+.password-box input{
+    width:100%;
+    height:70px;
+    font-size:22px;
+    padding:20px;
+}
+
+.main-btn{
+    width:100%;
+    height:70px;
+    font-size:24px;
+    font-weight:bold;
+}
+
+.options{
+
+    flex-direction:column;
+
+    align-items:flex-start;
+
+    gap:12px;
+
+}
+
+}
