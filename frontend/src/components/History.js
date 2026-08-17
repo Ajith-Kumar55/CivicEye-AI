@@ -8,6 +8,7 @@ import {
   FaSpinner,
   FaMapMarkerAlt
 } from "react-icons/fa";
+import StatusTimeline from "./StatusTimeline";
 
 
 function History({
@@ -17,6 +18,51 @@ function History({
   userRole,
   onViewMap
 }) {
+
+  const [language, setLanguage] = React.useState(
+    localStorage.getItem("civiceye_language") || "English"
+  );
+  const kannada = language === "Kannada";
+  const [confirmModalItem, setConfirmModalItem] = React.useState(null);
+  const [localList, setLocalList] = React.useState(history || []);
+
+  React.useEffect(() => {
+    setLocalList(history || []);
+  }, [history]);
+
+  const handleCitizenRemove = async (item) => {
+    try {
+      const userObj = JSON.parse(localStorage.getItem("civiceye-user") || "{}");
+      const userEmail = userObj.email || item.citizen_email || "citizen@civiceye.com";
+
+      const res = await fetch(`http://127.0.0.1:5000/api/complaints/${item.id}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_email: userEmail })
+      });
+
+      if (res.ok) {
+        setConfirmModalItem(null);
+        setLocalList((prev) => prev.filter((c) => c.id !== item.id));
+      } else {
+        const data = await res.json();
+        alert(data.error || "Failed to remove complaint.");
+      }
+    } catch (err) {
+      console.error("Error removing complaint:", err);
+      alert("Network error removing complaint.");
+    }
+  };
+
+  React.useEffect(() => {
+    const handleLanguageChange = () => {
+      setLanguage(localStorage.getItem("civiceye_language") || "English");
+    };
+    window.addEventListener("civiceye-language-change", handleLanguageChange);
+    return () => {
+      window.removeEventListener("civiceye-language-change", handleLanguageChange);
+    };
+  }, []);
 
   const getSeverityColor = (severity) => {
 
@@ -145,7 +191,7 @@ function History({
 
       ) : (
 
-        history.map((item, index) => {
+        localList.map((item, index) => {
 
           const status =
             item.status || "Pending";
@@ -450,35 +496,97 @@ function History({
               </div>
 
 
-              {/* STATUS FLOW */}
+              {/* COMPLAINT STATUS TIMELINE */}
+              <StatusTimeline complaint={item} language={language} />
 
-              <div
-                style={{
-                  marginTop: "20px",
-                  paddingTop: "15px",
-                  borderTop:
-                    "1px solid #475569",
-                  textAlign: "center",
-                  color: "#94a3b8"
-                }}
-              >
 
-                🟡 Pending
+              {/* MUNICIPALITY RESOLUTION PROOF FOR CITIZEN */}
+              {status === "Resolved" && (
+                <div
+                  style={{
+                    marginTop: "18px",
+                    padding: "16px",
+                    background: "linear-gradient(145deg, #064e3b, #0f172a)",
+                    borderRadius: "12px",
+                    border: "1px solid #10b981",
+                    color: "#fff"
+                  }}
+                >
+                  <h4 style={{ margin: "0 0 10px", color: "#34d399", display: "flex", alignItems: "center", gap: "8px" }}>
+                    🏆 Municipality Resolution Proof
+                  </h4>
 
-                {"  →  "}
+                  <div style={{ marginBottom: "8px", fontSize: "14px" }}>
+                    <b>Title:</b> {item.resolution_title || "Public Infrastructure Issue Resolved"}
+                  </div>
 
-                🔵 In Progress
+                  {item.description && (
+                    <div style={{ marginBottom: "8px", fontSize: "13px", color: "#cbd5e1" }}>
+                      <b>Original Problem:</b> {item.description}
+                    </div>
+                  )}
 
-                {"  →  "}
+                  <div style={{ marginBottom: "8px", fontSize: "14px" }}>
+                    <b>Action Taken:</b> {item.resolution_description || "Municipality maintenance team inspected, repaired, and verified the issue."}
+                  </div>
 
-                🟢 Resolved
+                  {item.resolution_date && (
+                    <div style={{ marginBottom: "12px", fontSize: "12px", color: "#94a3b8" }}>
+                      📅 <b>Resolution Date:</b> {item.resolution_date}
+                    </div>
+                  )}
 
-              </div>
+                  {item.resolution_image && (
+                    <div>
+                      <div style={{ fontWeight: "bold", fontSize: "13px", marginBottom: "6px", color: "#34d399" }}>
+                        🖼️ Resolution Proof Photo:
+                      </div>
+                      <img
+                        src={item.resolution_image}
+                        alt="Resolution Proof"
+                        onError={(e) => {
+                          e.target.onerror = null;
+                          e.target.style.display = "none";
+                        }}
+                        style={{
+                          maxWidth: "100%",
+                          maxHeight: "220px",
+                          borderRadius: "10px",
+                          border: "2px solid #10b981",
+                          objectFit: "cover"
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
 
+              {/* CITIZEN REMOVE BUTTON (ONLY AVAILABLE WHEN RESOLVED) */}
+              {!canChangeStatus && status === "Resolved" && (
+                <div style={{ marginTop: "15px", textAlign: "right" }}>
+                  <button
+                    onClick={() => setConfirmModalItem(item)}
+                    style={{
+                      background: "#ef4444",
+                      color: "white",
+                      border: "none",
+                      padding: "8px 16px",
+                      borderRadius: "8px",
+                      cursor: "pointer",
+                      fontWeight: "bold",
+                      fontSize: "12px",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "6px"
+                    }}
+                  >
+                    <FaTrash /> {kannada ? "ಇತಿಹಾಸದಿಂದ ತೆಗೆದುಹಾಕಿ" : "Remove from History"}
+                  </button>
+                </div>
+              )}
 
               {/* CITIZEN MESSAGE */}
-
-              {!canChangeStatus && (
+              {!canChangeStatus && status !== "Resolved" && (
 
                 <div
                   style={{
@@ -505,6 +613,80 @@ function History({
 
         })
 
+      )}
+
+      {/* CONFIRMATION DIALOG FOR CITIZEN REMOVE */}
+      {confirmModalItem && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100vw",
+            height: "100vh",
+            background: "rgba(15, 23, 42, 0.85)",
+            backdropFilter: "blur(5px)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 3000
+          }}
+        >
+          <div
+            style={{
+              background: "#1e293b",
+              border: "2px solid #ef4444",
+              padding: "25px",
+              borderRadius: "16px",
+              maxWidth: "450px",
+              width: "90%",
+              color: "#fff",
+              textAlign: "center",
+              boxShadow: "0 20px 40px rgba(0,0,0,0.5)"
+            }}
+          >
+            <h3 style={{ margin: "0 0 12px", color: "#ef4444" }}>
+              ⚠️ {kannada ? "ಪೂರ್ಣಗೊಂಡ ದೂರನ್ನು ತೆಗೆದುಹಾಕಿ" : "Remove Completed Complaint"}
+            </h3>
+            <p style={{ color: "#cbd5e1", fontSize: "14px", lineHeight: "1.5", marginBottom: "20px" }}>
+              {kannada
+                ? "ನಿಮ್ಮ ಇತಿಹಾಸದಿಂದ ಈ ಪೂರ್ಣಗೊಂಡ ದೂರನ್ನು ತೆಗೆದುಹಾಕಲು ನೀವು ಖಚಿತವಾಗಿದ್ದೀರಾ?"
+                : "Are you sure you want to remove this completed complaint from your history?"}
+            </p>
+
+            <div style={{ display: "flex", justifyContent: "center", gap: "15px" }}>
+              <button
+                onClick={() => setConfirmModalItem(null)}
+                style={{
+                  background: "#475569",
+                  color: "#fff",
+                  border: "none",
+                  padding: "10px 20px",
+                  borderRadius: "10px",
+                  fontWeight: "bold",
+                  cursor: "pointer"
+                }}
+              >
+                {kannada ? "ರದ್ದುಮಾಡಿ" : "Cancel"}
+              </button>
+
+              <button
+                onClick={() => handleCitizenRemove(confirmModalItem)}
+                style={{
+                  background: "#ef4444",
+                  color: "#fff",
+                  border: "none",
+                  padding: "10px 20px",
+                  borderRadius: "10px",
+                  fontWeight: "bold",
+                  cursor: "pointer"
+                }}
+              >
+                {kannada ? "ತೆಗೆದುಹಾಕಿ" : "Remove"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
     </div>

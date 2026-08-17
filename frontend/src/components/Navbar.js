@@ -5,7 +5,7 @@ import {
   FaSignOutAlt,
 } from "react-icons/fa";
 
-function Navbar({ onLogout }) {
+function Navbar({ onLogout, userRole = "citizen", currentUser = null }) {
   const [currentTime, setCurrentTime] = useState("");
   const [showNotifications, setShowNotifications] = useState(false);
 
@@ -16,6 +16,14 @@ function Navbar({ onLogout }) {
 
     return () => clearInterval(timer);
   }, []);
+
+  const displayName =
+    userRole === "admin"
+      ? "Municipality Admin 👨‍💼"
+      : currentUser?.name
+      ? `${currentUser.name} 👤`
+      : "Citizen User 👤";
+
 
   return (
     <div
@@ -149,7 +157,7 @@ function Navbar({ onLogout }) {
                 fontSize: "16px",
               }}
             >
-              Administrator 👨‍💼
+              {displayName}
             </div>
 
             <div

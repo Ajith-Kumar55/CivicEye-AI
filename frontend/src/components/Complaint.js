@@ -76,7 +76,7 @@ function Complaint({ results, location, setLocation, onSearchLocation }) {
   const kannada = language === "Kannada";
 
 
-  const submitComplaint = () => {
+  const submitComplaint = async () => {
 
     if (!location || !description) {
 
@@ -89,6 +89,26 @@ function Complaint({ results, location, setLocation, onSearchLocation }) {
       return;
     }
 
+    try {
+      const storedUser = JSON.parse(localStorage.getItem("civiceye-user") || "{}");
+
+      await fetch("http://127.0.0.1:5000/api/complaint/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          issue: issue || "Public Infrastructure Issue",
+          confidence: confidence || 80,
+          severity: severity || "MEDIUM",
+          location: location,
+          description: description,
+          citizen_name: storedUser.name || "Registered Citizen",
+          citizen_email: storedUser.email || "citizen@civiceye.com",
+          citizen_phone: storedUser.phone || "+91 9876543210"
+        })
+      });
+    } catch (err) {
+      console.log("Complaint submit API error:", err);
+    }
 
     alert(
       kannada

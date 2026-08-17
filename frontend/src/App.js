@@ -11,9 +11,27 @@ import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import Settings from "./components/Settings";
 import History from "./components/History";
+import ResolutionFeed from "./components/ResolutionFeed";
+import AdminDashboard from "./components/MunicipalityAdmin/AdminDashboard";
 
 const API_BASE_URL = "http://127.0.0.1:5000";
+const cleanIssueName = (issue) => {
+  const name = String(issue || "").toLowerCase();
 
+  if (name.includes("water_leakage") || name.includes("water leakage")) {
+    return "water leakage";
+  }
+
+  if (name.includes("pothole")) {
+    return "pothole";
+  }
+
+  if (name.includes("garbage")) {
+    return "garbage";
+  }
+
+  return issue;
+};
 function App() {
 
   // ======================
@@ -34,45 +52,44 @@ function App() {
   const canvasRef = useRef(null);
 
   const [cameraOn, setCameraOn] = useState(false);
-  const [loggedIn, setLoggedIn] = useState(false);
+  const [userRole, setUserRole] = useState(
+    sessionStorage.getItem("civiceye_role") || ""
+  );
+  const [currentUser, setCurrentUser] = useState(
+    JSON.parse(sessionStorage.getItem("civiceye_user") || "null")
+  );
+  const [loggedIn, setLoggedIn] = useState(
+    !!sessionStorage.getItem("civiceye_role")
+  );
   const [loading, setLoading] = useState(false);
   const [showLanding, setShowLanding] = useState(true);
-  const [userRole, setUserRole] = useState("");
   const [citizenView, setCitizenView] = useState("home");
   const [language, setLanguage] = useState(
-  localStorage.getItem("civiceye_language") || "English"
-);
+    localStorage.getItem("civiceye_language") || "English"
+  );
 
 const kannada = language === "Kannada";
 
   // ======================
-  // START CAMERA
-  // ======================
+// START CAMERA
+// ======================
 
-  const startCamera = async () => {
+const startCamera = async () => {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: true
+    });
 
-    try {
+    videoRef.current.srcObject = stream;
+    await videoRef.current.play();
+    setCameraOn(true);
 
-      const stream =
-        await navigator.mediaDevices.getUserMedia({
-          video: true
-        });
+  } catch (err) {
+    console.log(err);
+    alert("Cannot access camera");
+  }
+};
 
-      videoRef.current.srcObject = stream;
-
-      setCameraOn(true);
-
-    }
-
-    catch (err) {
-
-      console.log(err);
-
-      alert("Cannot access camera");
-
-    }
-
-  };
 
   // ======================
   // STOP CAMERA
@@ -142,8 +159,14 @@ setLoading(true);
 
       console.log(data);
 
-      setResults(data.detections || []);
+     const validDetections = (data.detections || [])
+  .filter((item) => Number(item.confidence) >= 80)
+  .map((item) => ({
+    ...item,
+    issue: cleanIssueName(item.issue),
+  }));
 
+setResults(validDetections);
       setPredictionImage(
         data.prediction_image || ""
       );
@@ -222,7 +245,14 @@ setLoading(false);
 
         console.log(data);
 
-        setResults(data.detections || []);
+       const validDetections = (data.detections || [])
+  .filter((item) => Number(item.confidence) >= 80)
+  .map((item) => ({
+    ...item,
+    issue: cleanIssueName(item.issue),
+  }));
+
+setResults(validDetections);
 
         setPredictionImage(
           data.prediction_image || ""
@@ -291,6 +321,10 @@ const updateComplaintStatus = (index, newStatus) => {
 
   fetchHistory();
 
+  const syncInterval = setInterval(() => {
+    fetchHistory();
+  }, 8000);
+
   const handleLanguageChange = () => {
     setLanguage(
       localStorage.getItem("civiceye_language") || "English"
@@ -303,6 +337,7 @@ const updateComplaintStatus = (index, newStatus) => {
   );
 
   return () => {
+    clearInterval(syncInterval);
     stopCamera();
 
     window.removeEventListener(
@@ -592,10 +627,39 @@ const searchComplaintLocation = async () => {
 // RETURN
 // ======================
 
+const handleLogout = () => {
+  stopCamera();
+  setLoggedIn(false);
+  setUserRole("");
+  setCurrentUser(null);
+  sessionStorage.removeItem("civiceye_role");
+  sessionStorage.removeItem("civiceye_admin_token");
+  sessionStorage.removeItem("civiceye_user");
+  setCitizenView("home");
+  setShowLanding(true);
+};
+
 if (!loggedIn) {
   return (
     <Login
-      onLogin={() => setLoggedIn(true)}
+      onLogin={(role, userData) => {
+        setLoggedIn(true);
+        setUserRole(role);
+        setCurrentUser(userData);
+        sessionStorage.setItem("civiceye_role", role);
+        if (userData) {
+          sessionStorage.setItem("civiceye_user", JSON.stringify(userData));
+        }
+      }}
+    />
+  );
+}
+
+if (userRole === "admin") {
+  return (
+    <AdminDashboard
+      onLogout={handleLogout}
+      history={history}
     />
   );
 }
@@ -619,12 +683,9 @@ return (
   }}
 >
     <Navbar
-  onLogout={() => {
-    setLoggedIn(false);
-    setUserRole("");
-    setCitizenView("home");
-    setShowLanding(true);
-  }}
+  onLogout={handleLogout}
+  userRole={userRole}
+  currentUser={currentUser}
 />
 
     <h1
@@ -1059,6 +1120,15 @@ return (
     updateStatus={updateComplaintStatus}
     userRole={userRole}
   />
+
+</div>
+
+
+{/* RESOLUTION FEED */}
+
+<div id="resolution-feed" style={sectionStyle}>
+
+  <ResolutionFeed userRole={userRole} />
 
 </div>
 

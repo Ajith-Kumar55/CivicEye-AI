@@ -236,6 +236,23 @@ function Sidebar() {
 
         text={
           kannada
+            ? "ಮಹಾನಗರ ನವೀಕರಣಗಳು"
+            : "Municipality Updates"
+        }
+
+        onClick={() =>
+          scrollToSection("resolution-feed")
+        }
+
+      />
+
+
+      <Menu
+
+        icon={<FaMapMarkedAlt />}
+
+        text={
+          kannada
             ? "ಗೂಗಲ್ ನಕ್ಷೆ"
             : "Google Map"
         }
