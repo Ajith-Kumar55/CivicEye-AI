@@ -363,7 +363,7 @@ def detect():
         except Exception as img_err:
             print("[detect] Image optimization notice:", img_err)
         prep_time = time.time() - prep_start
-        print(f"[detect] image preprocessing time: {prep_time:.2f}s")
+        print(f"[detect] preprocessing: {prep_time:.2f}s")
 
         # -------------------------
         # RUN YOLO INFERENCE (LAZY MODEL GETTER, CPU, IMGSZ=416)
@@ -371,10 +371,11 @@ def detect():
         model_start = time.time()
         yolo_model = get_model()
         model_time = time.time() - model_start
-        print(f"[detect] model loading time: {model_time:.2f}s")
+        print(f"[detect] model loading: {model_time:.2f}s")
 
         inf_start = time.time()
         import torch
+        torch.set_num_threads(1)
         with torch.no_grad():
             results = yolo_model.predict(
                 source=filepath,
@@ -385,8 +386,9 @@ def detect():
                 verbose=False
             )
         inf_duration = time.time() - inf_start
-        print(f"[detect] YOLO inference time: {inf_duration:.2f}s")
+        print(f"[detect] inference: {inf_duration:.2f}s")
 
+        res_start = time.time()
         detections = []
         valid_results = []
 
@@ -439,54 +441,40 @@ def detect():
                 )
 
                 # -------------------------
-                # FALSE POSITIVE FILTER
+                # FALSE POSITIVE FILTER & CANDIDATE LOGGING
                 # -------------------------
                 suspicious_detection = False
+                reject_reason = "None"
 
-                # Reject extremely large boxes
-                if area_ratio >= 0.75:
-                    suspicious_detection = True
-
-                # Reject the known false
-                # water-leakage/person detection
                 if "water" in issue_lower:
-
-                    if (
-                        area_ratio >= 0.50
-                        and height_ratio >= 0.88
-                    ):
+                    if area_ratio >= 0.50 and height_ratio >= 0.88:
                         suspicious_detection = True
-
-                    if height_ratio >= 0.97:
+                        reject_reason = "water_leakage_large_person_filter"
+                    elif height_ratio >= 0.97:
                         suspicious_detection = True
-
-                # Reject extremely large
-                # pothole / garbage boxes
-                if (
-                    "pothole" in issue_lower
-                    or "garbage" in issue_lower
-                ):
-
-                    if (
-                        area_ratio >= 0.70
-                        and height_ratio >= 0.90
-                    ):
+                        reject_reason = "water_leakage_full_height_filter"
+                elif "garbage" in issue_lower:
+                    if area_ratio >= 0.92 and height_ratio >= 0.95:
                         suspicious_detection = True
+                        reject_reason = "garbage_full_frame_filter"
+                elif "pothole" in issue_lower:
+                    # Potholes can cover large areas of close-up road photos safely.
+                    # Only reject if bounding box is full frame edge-to-edge artifact.
+                    if area_ratio >= 0.98 and height_ratio >= 0.98 and width_ratio >= 0.98:
+                        suspicious_detection = True
+                        reject_reason = "pothole_full_frame_filter"
+                else:
+                    if area_ratio >= 0.95:
+                        suspicious_detection = True
+                        reject_reason = "generic_extreme_area_filter"
 
-                # -------------------------
-                # REJECT FALSE DETECTION
-                # -------------------------
+                print(
+                    f"[detect] candidate: issue={issue} confidence={confidence}% "
+                    f"area_ratio={area_ratio:.2f} width_ratio={width_ratio:.2f} height_ratio={height_ratio:.2f} "
+                    f"accepted={not suspicious_detection} reason={reject_reason}"
+                )
+
                 if suspicious_detection:
-
-                    print(
-                        "Rejected suspicious detection:",
-                        issue,
-                        f"{confidence}%",
-                        f"area={area_ratio:.2f}",
-                        f"width={width_ratio:.2f}",
-                        f"height={height_ratio:.2f}"
-                    )
-
                     continue
 
                 # -------------------------
@@ -600,6 +588,9 @@ def detect():
 
             detections.append(detection)
 
+        res_time = time.time() - res_start
+        print(f"[detect] result processing: {res_time:.2f}s")
+
         # -------------------------
         # SAVE HISTORY
         # -------------------------
@@ -617,7 +608,7 @@ def detect():
             strongest_detection
         )
         db_time = time.time() - db_start
-        print(f"[detect] database save time: {db_time:.2f}s")
+        print(f"[detect] database: {db_time:.2f}s")
 
         # -------------------------
         # PREDICTION URL (DYNAMIC HOST)
@@ -626,7 +617,7 @@ def detect():
         prediction_url = f"{host_url}/prediction/{prediction_image}"
 
         total_duration = time.time() - start_time
-        print(f"[detect] total request time: {total_duration:.2f}s")
+        print(f"[detect] total: {total_duration:.2f}s")
 
         gc.collect()
 

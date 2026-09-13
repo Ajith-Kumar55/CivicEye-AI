@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 
 function UploadSection({
   preview,
+  loading,
   handleImageChange,
   uploadImage
 }) {
@@ -69,6 +70,7 @@ function UploadSection({
       <input
         type="file"
         onChange={handleImageChange}
+        disabled={loading}
         style={{
           marginBottom: "20px",
           color: "white"
@@ -79,20 +81,22 @@ function UploadSection({
 
       <button
         onClick={uploadImage}
+        disabled={loading}
         style={{
-          background: "#06b6d4",
+          background: loading ? "#64748b" : "#06b6d4",
           color: "white",
           border: "none",
           padding: "12px 28px",
           borderRadius: "10px",
-          cursor: "pointer",
+          cursor: loading ? "not-allowed" : "pointer",
           fontSize: "16px",
-          marginTop: "10px"
+          marginTop: "10px",
+          opacity: loading ? 0.75 : 1
         }}
       >
-        {kannada
-          ? "ಅಪ್‌ಲೋಡ್ ಮಾಡಿ ಮತ್ತು ಪತ್ತೆಹಚ್ಚಿ"
-          : "Upload & Detect"}
+        {loading
+          ? (kannada ? "⏳ ಪತ್ತೆಹಚ್ಚಲಾಗುತ್ತಿದೆ..." : "⏳ Detecting...")
+          : (kannada ? "ಅಪ್‌ಲೋಡ್ ಮಾಡಿ ಮತ್ತು ಪತ್ತೆಹಚ್ಚಿ" : "Upload & Detect")}
       </button>
 
       {preview && (
