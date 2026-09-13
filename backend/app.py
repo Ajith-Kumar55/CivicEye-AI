@@ -416,7 +416,7 @@ def detect():
         try:
             with Image.open(filepath) as img:
                 img_w, img_h = img.size
-                max_dim = 416
+                max_dim = 320
                 if max(img_w, img_h) > max_dim:
                     img = img.convert("RGB")
                     img.thumbnail((max_dim, max_dim), Image.Resampling.BILINEAR)
@@ -429,7 +429,7 @@ def detect():
         trim_memory()
 
         # -------------------------
-        # RUN YOLO INFERENCE (LAZY MODEL GETTER, CPU, IMGSZ=416, CONF=0.25)
+        # RUN YOLO INFERENCE (LAZY MODEL GETTER, CPU, IMGSZ=320, CONF=0.25)
         # -------------------------
         model_start = time.time()
         yolo_model = get_model()
@@ -446,12 +446,12 @@ def detect():
             except Exception:
                 pass
 
-        with torch.no_grad():
+        with torch.inference_mode():
             results = yolo_model.predict(
                 source=filepath,
                 save=False,
                 conf=0.25,
-                imgsz=416,
+                imgsz=320,
                 device='cpu',
                 verbose=False
             )
