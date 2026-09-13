@@ -128,17 +128,6 @@ def get_model():
                 print(f"[detect] model loading finished in {load_time:.2f}s with names: {getattr(_model, 'names', None)}")
     return _model
 
-def _background_model_preload():
-    try:
-        print("[preload] Starting non-blocking background YOLO model pre-load...")
-        get_model()
-        print("[preload] Background YOLO model pre-load finished successfully!")
-    except Exception as e:
-        print("[preload] Background model pre-load notice:", e)
-
-# Trigger background model pre-load thread on server startup (non-blocking for Flask/health)
-threading.Thread(target=_background_model_preload, daemon=True).start()
-
 def init_db():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
