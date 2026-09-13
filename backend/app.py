@@ -44,6 +44,19 @@ def add_cors_headers(response):
         response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
 
     return response
+# =========================
+# FOLDERS & DATABASE
+# =========================
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+UPLOAD_FOLDER = os.path.join(BASE_DIR, "uploads")
+PREDICT_FOLDER = os.path.join(BASE_DIR, "predictions")
+DB_PATH = os.path.join(BASE_DIR, "complaints.db")
+
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+os.makedirs(PREDICT_FOLDER, exist_ok=True)
+
 @app.route("/health", methods=["GET"])
 def health():
     return jsonify({"status": "ok"}), 200
@@ -57,24 +70,12 @@ _model = None
 def get_model():
     global _model
     if _model is None:
-        print("[YOLO] Loading model best.pt lazily on demand...")
+        print("[YOLO] Loading model best.pt lazily on demand (CPU mode)...")
         from ultralytics import YOLO
-        _model = YOLO(os.path.join(BASE_DIR, "best.pt"))
+        model_path = os.path.join(BASE_DIR, "best.pt")
+        _model = YOLO(model_path)
         print("[YOLO] Model best.pt loaded successfully.")
     return _model
-
-# =========================
-# FOLDERS & DATABASE
-# =========================
-
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
-UPLOAD_FOLDER = os.path.join(BASE_DIR, "uploads")
-PREDICT_FOLDER = os.path.join(BASE_DIR, "predictions")
-DB_PATH = os.path.join(BASE_DIR, "complaints.db")
-
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-os.makedirs(PREDICT_FOLDER, exist_ok=True)
 
 def init_db():
     conn = sqlite3.connect(DB_PATH)
@@ -316,7 +317,7 @@ def detect():
             return jsonify({"error": "No file selected"}), 400
 
         # -------------------------
-        # SAVE UPLOADED IMAGE
+        # SAVE UPLOADED IMAGE (MAX 10MB)
         # -------------------------
         filename = os.path.basename(file.filename)
         filepath = os.path.join(UPLOAD_FOLDER, filename)
@@ -324,6 +325,10 @@ def detect():
 
         file_size = os.path.getsize(filepath)
         print(f"[/detect] Received file: {filename}, size: {file_size} bytes")
+
+        if file_size > 10 * 1024 * 1024:
+            os.remove(filepath)
+            return jsonify({"error": "Uploaded image exceeds 10MB limit"}), 400
 
         # -------------------------
         # OPTIMIZE IMAGE FOR MEMORY & INFERENCE
@@ -342,7 +347,7 @@ def detect():
             print("[/detect] Image optimization notice:", img_err)
 
         # -------------------------
-        # RUN YOLO INFERENCE (LAZY MODEL GETTER)
+        # RUN YOLO INFERENCE (LAZY MODEL GETTER, CPU, IMGSZ=416)
         # -------------------------
         yolo_model = get_model()
 
@@ -351,7 +356,8 @@ def detect():
             source=filepath,
             save=False,
             conf=0.60,
-            imgsz=640,
+            imgsz=416,
+            device='cpu',
             verbose=False
         )
         inf_duration = time.time() - inf_start
