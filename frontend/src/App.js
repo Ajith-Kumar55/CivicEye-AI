@@ -142,15 +142,15 @@ const startCamera = async () => {
   // ======================
 
   const handleImageChange = (e) => {
-
     const file = e.target.files[0];
-
     if (!file) return;
 
     setSelectedImage(file);
-
     setPreview(URL.createObjectURL(file));
 
+    // Immediately clear previous detection results and prediction image
+    setResults([]);
+    setPredictionImage("");
   };
 
   // ======================
@@ -158,7 +158,6 @@ const startCamera = async () => {
   // ======================
 
   const uploadImage = async () => {
-
     if (!selectedImage) {
       alert("Select image first");
       return;
@@ -168,6 +167,10 @@ const startCamera = async () => {
       console.log("[Upload] Detection already in progress, skipping duplicate request.");
       return;
     }
+
+    // Clear previous detection results and prediction image before sending request
+    setResults([]);
+    setPredictionImage("");
 
     const formData = new FormData();
     formData.append("image", selectedImage);
@@ -187,7 +190,7 @@ const startCamera = async () => {
       }
 
       const data = await response.json();
-      console.log(data);
+      console.log("[Upload] /detect response:", data);
 
       const validDetections = (data.detections || []).map((item) => ({
         ...item,
@@ -208,9 +211,11 @@ const startCamera = async () => {
       setLoading(false);
 
     } catch (err) {
-      console.error("[Upload] /detect failed:", err);
+      console.error("[Upload] Detection failed:", err);
       setLoading(false);
-      alert("Upload Failed");
+      setResults([]);
+      setPredictionImage("");
+      alert(kannada ? "ಪತ್ತೆಹಚ್ಚುವುದು ವಿಫಲವಾಗಿದೆ. ದಯವಿಟ್ಟು ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ." : "Detection failed. Please try the image again.");
     }
 
   };
@@ -243,6 +248,10 @@ const startCamera = async () => {
 
     canvas.toBlob(
       async (blob) => {
+        // Clear previous detection results and prediction image before sending request
+        setResults([]);
+        setPredictionImage("");
+
         try {
           const formData = new FormData();
           formData.append(
@@ -264,7 +273,7 @@ const startCamera = async () => {
           }
 
           const data = await response.json();
-          console.log(data);
+          console.log("[Camera] /detect response:", data);
 
           const validDetections = (data.detections || []).map((item) => ({
             ...item,
@@ -285,7 +294,9 @@ const startCamera = async () => {
 
         } catch (err) {
           console.error("Camera Detection Error:", err);
-          alert("Camera Detection Failed");
+          setResults([]);
+          setPredictionImage("");
+          alert(kannada ? "ಕ್ಯಾಮೆರಾ ಪತ್ತೆಹಚ್ಚುವಿಕೆ ವಿಫಲವಾಗಿದೆ. ದಯವಿಟ್ಟು ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ." : "Camera Detection Failed. Please try again.");
         }
       },
       "image/jpeg"

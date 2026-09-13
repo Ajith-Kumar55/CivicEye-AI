@@ -447,12 +447,13 @@ def detect():
                 reject_reason = "None"
 
                 if "water" in issue_lower:
-                    if area_ratio >= 0.50 and height_ratio >= 0.88:
+                    # Reject narrow vertical standing person selfies while accepting genuine water leakage photos
+                    if area_ratio >= 0.60 and height_ratio >= 0.88 and width_ratio <= 0.45:
                         suspicious_detection = True
-                        reject_reason = "water_leakage_large_person_filter"
-                    elif height_ratio >= 0.97:
+                        reject_reason = "water_leakage_narrow_person_selfie_filter"
+                    elif area_ratio >= 0.98 and height_ratio >= 0.98 and width_ratio >= 0.98:
                         suspicious_detection = True
-                        reject_reason = "water_leakage_full_height_filter"
+                        reject_reason = "water_leakage_full_frame_filter"
                 elif "garbage" in issue_lower:
                     if area_ratio >= 0.92 and height_ratio >= 0.95:
                         suspicious_detection = True
