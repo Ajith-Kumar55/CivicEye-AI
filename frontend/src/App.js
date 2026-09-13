@@ -186,7 +186,14 @@ const startCamera = async () => {
       );
 
       if (!response.ok) {
-        throw new Error(`Backend request failed with status: ${response.status}`);
+        let errDetails = "";
+        try {
+          const errData = await response.json();
+          errDetails = errData.error || JSON.stringify(errData);
+        } catch (_) {
+          errDetails = await response.text().catch(() => "");
+        }
+        throw new Error(`Backend /detect returned status ${response.status}: ${errDetails}`);
       }
 
       const data = await response.json();
