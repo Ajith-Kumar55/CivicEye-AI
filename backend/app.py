@@ -4,6 +4,9 @@ os.environ["MKL_NUM_THREADS"] = "1"
 os.environ["OPENBLAS_NUM_THREADS"] = "1"
 os.environ["VECLIB_MAXIMUM_THREADS"] = "1"
 os.environ["NUMEXPR_NUM_THREADS"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = ""
+os.environ["YOLO_OFFLINE"] = "true"
+os.environ["ULTRALYTICS_AUTOINSTALL"] = "false"
 
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
@@ -12,6 +15,7 @@ import sqlite3
 import shutil
 import time
 import gc
+import threading
 from PIL import Image
 
 app = Flask(__name__)
@@ -72,6 +76,7 @@ def health_model():
 # LAZY MODEL LOADING
 # =========================
 
+_model_lock = threading.Lock()
 _model = None
 
 def normalize_issue_name(raw_label):
@@ -90,18 +95,37 @@ def normalize_issue_name(raw_label):
 def get_model():
     global _model
     if _model is None:
-        print("[detect] model loading started")
-        t0 = time.time()
-        from ultralytics import YOLO
-        model_path = os.path.join(BASE_DIR, "best.pt")
-        _model = YOLO(model_path)
-        if hasattr(_model, "names") and isinstance(_model.names, dict):
-            for k, v in list(_model.names.items()):
-                _model.names[k] = normalize_issue_name(v)
-        elif hasattr(_model, "names") and isinstance(_model.names, list):
-            _model.names = [normalize_issue_name(v) for v in _model.names]
-        load_time = time.time() - t0
-        print(f"[detect] model loading finished in {load_time:.2f}s with names: {getattr(_model, 'names', None)}")
+        with _model_lock:
+            if _model is None:
+                t0 = time.time()
+                print("[detect] model loading started")
+                print("[model] load start")
+                model_path = os.path.join(BASE_DIR, "best.pt")
+                exists = os.path.exists(model_path)
+                size_mb = (os.path.getsize(model_path) / (1024 * 1024)) if exists else 0
+                print(f"[model] model path = {model_path}")
+                print(f"[model] model exists = {exists}")
+                print(f"[model] model size = {size_mb:.2f} MB")
+
+                if not exists:
+                    raise FileNotFoundError(f"YOLO model file not found at path: {model_path}")
+
+                print("[model] YOLO initialization starting")
+                from ultralytics import YOLO
+                loaded_m = YOLO(model_path)
+                print("[model] YOLO object created")
+
+                if hasattr(loaded_m, "names") and isinstance(loaded_m.names, dict):
+                    for k, v in list(loaded_m.names.items()):
+                        loaded_m.names[k] = normalize_issue_name(v)
+                elif hasattr(loaded_m, "names") and isinstance(loaded_m.names, list):
+                    loaded_m.names = [normalize_issue_name(v) for v in loaded_m.names]
+
+                _model = loaded_m
+                load_time = time.time() - t0
+                print("[model] CPU configuration complete")
+                print(f"[model] model load complete in {load_time:.2f}s")
+                print(f"[detect] model loading finished in {load_time:.2f}s with names: {getattr(_model, 'names', None)}")
     return _model
 
 def init_db():
