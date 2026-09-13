@@ -173,7 +173,7 @@ const startCamera = async () => {
     setPredictionImage("");
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 90000); // 90-second timeout
+    const timeoutId = setTimeout(() => controller.abort(), 180000); // 180-second timeout for Render cold start
 
     const formData = new FormData();
     formData.append("image", selectedImage);
@@ -225,9 +225,11 @@ const startCamera = async () => {
       setResults([]);
       setPredictionImage("");
       if (err.name === "AbortError") {
-        alert(kannada ? "ಶೋಧನೆ ಸಮಯ ಮೀರಿದೆ. ದಯವಿಟ್ಟು ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ." : "Detection timed out. Please try again.");
+        alert(kannada ? "ಶೋಧನೆ ಸಮಯ ಮೀರಿದೆ (180 ಸೆಕೆಂಡುಗಳು). ದಯವಿಟ್ಟು ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ." : "Detection timed out after 180 seconds. Please try again.");
+      } else if (String(err.message || "").includes("502") || String(err.message || "").includes("503") || String(err.message || "").includes("Failed to fetch")) {
+        alert(kannada ? "ಎಐ ಸರ್ವರ್ ಸಕ್ರಿಯಗೊಳ್ಳುತ್ತಿದೆ. ದಯವಿಟ್ಟು ಸ್ವಲ್ಪ ಸಮಯದ ನಂತರ ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ." : "AI server is waking up. Please try again in a moment.");
       } else {
-        alert(kannada ? "ಪತ್ತೆಹಚ್ಚುವುದು ವಿಫಲವಾಗಿದೆ. ದಯವಿಟ್ಟು ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ." : "Detection failed. Please try the image again.");
+        alert(kannada ? `ಪತ್ತೆಹಚ್ಚುವುದು ವಿಫಲವಾಗಿದೆ: ${err.message}` : `Detection failed: ${err.message}`);
       }
     } finally {
       clearTimeout(timeoutId);
@@ -267,7 +269,7 @@ const startCamera = async () => {
     );
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 90000); // 90-second timeout
+    const timeoutId = setTimeout(() => controller.abort(), 180000); // 180-second timeout
 
     canvas.toBlob(
       async (blob) => {
@@ -329,9 +331,11 @@ const startCamera = async () => {
           setResults([]);
           setPredictionImage("");
           if (err.name === "AbortError") {
-            alert(kannada ? "ಶೋಧನೆ ಸಮಯ ಮೀರಿದೆ. ದಯವಿಟ್ಟು ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ." : "Detection timed out. Please try again.");
+            alert(kannada ? "ಶೋಧನೆ ಸಮಯ ಮೀರಿದೆ (180 ಸೆಕೆಂಡುಗಳು). ದಯವಿಟ್ಟು ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ." : "Detection timed out after 180 seconds. Please try again.");
+          } else if (String(err.message || "").includes("502") || String(err.message || "").includes("503") || String(err.message || "").includes("Failed to fetch")) {
+            alert(kannada ? "ಎಐ ಸರ್ವರ್ ಸಕ್ರಿಯಗೊಳ್ಳುತ್ತಿದೆ. ದಯವಿಟ್ಟು ಸ್ವಲ್ಪ ಸಮಯದ ನಂತರ ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ." : "AI server is waking up. Please try again in a moment.");
           } else {
-            alert(kannada ? "ಕ್ಯಾಮೆರಾ ಪತ್ತೆಹಚ್ಚುವಿಕೆ ವಿಫಲವಾಗಿದೆ. ದಯವಿಟ್ಟು ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ." : "Camera Detection Failed. Please try again.");
+            alert(kannada ? `ಕ್ಯಾಮೆರಾ ಪತ್ತೆಹಚ್ಚುವಿಕೆ ವಿಫಲವಾಗಿದೆ: ${err.message}` : `Camera Detection Failed: ${err.message}`);
           }
         } finally {
           clearTimeout(timeoutId);

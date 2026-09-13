@@ -99,6 +99,14 @@ function UploadSection({
           : (kannada ? "ಅಪ್‌ಲೋಡ್ ಮಾಡಿ ಮತ್ತು ಪತ್ತೆಹಚ್ಚಿ" : "Upload & Detect")}
       </button>
 
+      {loading && (
+        <p style={{ color: "#94a3b8", fontSize: "14px", marginTop: "12px", fontStyle: "italic" }}>
+          {kannada
+            ? "ಎಐ ಚಿತ್ರವನ್ನು ವಿಶ್ಲೇಷಿಸುತ್ತಿದೆ. ಸರ್ವರ್ ಸಕ್ರಿಯಗೊಳ್ಳುವಾಗ ಮೊದಲ ಪತ್ತೆಹಚ್ಚುವಿಕೆಗೆ ಸ್ವಲ್ಪ ಹೆಚ್ಚು ಸಮಯ ತೆಗೆದುಕೊಳ್ಳಬಹುದು."
+            : "AI is analyzing the image. First detection may take longer while the server wakes up."}
+        </p>
+      )}
+
       {preview && (
         <div
           style={{

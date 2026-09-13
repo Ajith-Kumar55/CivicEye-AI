@@ -61,6 +61,13 @@ os.makedirs(PREDICT_FOLDER, exist_ok=True)
 def health():
     return jsonify({"status": "ok"}), 200
 
+@app.route("/health/model", methods=["GET"])
+def health_model():
+    return jsonify({
+        "status": "ok",
+        "model_loaded": _model is not None
+    }), 200
+
 # =========================
 # LAZY MODEL LOADING
 # =========================
@@ -83,7 +90,8 @@ def normalize_issue_name(raw_label):
 def get_model():
     global _model
     if _model is None:
-        print("[YOLO] Loading model best.pt lazily on demand (CPU mode)...")
+        print("[detect] model loading started")
+        t0 = time.time()
         from ultralytics import YOLO
         model_path = os.path.join(BASE_DIR, "best.pt")
         _model = YOLO(model_path)
@@ -92,7 +100,8 @@ def get_model():
                 _model.names[k] = normalize_issue_name(v)
         elif hasattr(_model, "names") and isinstance(_model.names, list):
             _model.names = [normalize_issue_name(v) for v in _model.names]
-        print("[YOLO] Model best.pt loaded successfully with names:", getattr(_model, "names", None))
+        load_time = time.time() - t0
+        print(f"[detect] model loading finished in {load_time:.2f}s with names: {getattr(_model, 'names', None)}")
     return _model
 
 def init_db():
@@ -261,8 +270,10 @@ def init_db():
 init_db()
 
 def save_complaint_to_db(detection_dict):
+    db_t0 = time.time()
+    print("[detect] database save started")
     try:
-        conn = sqlite3.connect(DB_PATH)
+        conn = sqlite3.connect(DB_PATH, timeout=10.0)
         cursor = conn.cursor()
 
         issue = detection_dict.get("issue", "No Issue Detected")
@@ -295,9 +306,11 @@ def save_complaint_to_db(detection_dict):
         conn.commit()
         complaint_id = cursor.lastrowid
         conn.close()
+        db_time = time.time() - db_t0
+        print(f"[detect] database save finished in {db_time:.2f}s (complaint_id={complaint_id})")
         return complaint_id
     except Exception as e:
-        print("Database save error:", e)
+        print("[detect] Database save error:", e)
         return None
 
 # =========================
@@ -316,12 +329,13 @@ def home():
 
 
 # =========================
-# DETECT
+# DETECT Route
 # =========================
 
 @app.route("/detect", methods=["POST"])
 def detect():
     start_time = time.time()
+    print("[detect] REQUEST START")
     try:
         # -------------------------
         # CHECK IMAGE
@@ -342,7 +356,8 @@ def detect():
         file.save(filepath)
 
         file_size = os.path.getsize(filepath)
-        print(f"[detect] upload received: {filename} ({file_size} bytes)")
+        print(f"[detect] file received: {filename} ({file_size} bytes)")
+        print("[detect] upload saved")
 
         if file_size > 10 * 1024 * 1024:
             os.remove(filepath)
@@ -352,6 +367,7 @@ def detect():
         # OPTIMIZE IMAGE FOR MEMORY & INFERENCE
         # Downscale large images (max 800px) to prevent PyTorch OOM & Gunicorn timeout
         # -------------------------
+        print("[detect] preprocessing started")
         prep_start = time.time()
         try:
             needs_resave = False
@@ -368,13 +384,12 @@ def detect():
         except Exception as img_err:
             print("[detect] Image optimization notice:", img_err)
         prep_time = time.time() - prep_start
-        print(f"[detect] preprocessing complete: {prep_time:.2f}s")
+        print(f"[detect] preprocessing finished in {prep_time:.2f}s")
 
         # -------------------------
         # RUN YOLO INFERENCE (LAZY MODEL GETTER, CPU, IMGSZ=416, CONF=0.25)
         # -------------------------
         model_start = time.time()
-        print("[detect] loading model")
         yolo_model = get_model()
         model_time = time.time() - model_start
         print(f"[detect] model ready ({model_time:.2f}s)")
@@ -393,7 +408,7 @@ def detect():
                 verbose=False
             )
         inf_duration = time.time() - inf_start
-        print(f"[detect] inference finished: {inf_duration:.2f}s")
+        print(f"[detect] inference finished in {inf_duration:.2f}s")
 
         filter_start = time.time()
         detections = []
@@ -513,7 +528,7 @@ def detect():
                     valid_results.append(result)
 
         filter_time = time.time() - filter_start
-        print(f"[detect] filtering finished: {filter_time:.2f}s")
+        print(f"[detect] filtering finished in {filter_time:.2f}s")
 
         # -------------------------
         # CREATE PREDICTION FOLDER
@@ -602,7 +617,6 @@ def detect():
         # -------------------------
         # SAVE HISTORY
         # -------------------------
-        db_start = time.time()
         strongest_detection = max(
             detections,
             key=lambda x: x["confidence"]
@@ -615,8 +629,6 @@ def detect():
         complaint_id = save_complaint_to_db(
             strongest_detection
         )
-        db_time = time.time() - db_start
-        print(f"[detect] database saved (complaint_id={complaint_id}, time={db_time:.2f}s)")
 
         # -------------------------
         # PREDICTION URL (DYNAMIC HOST)
