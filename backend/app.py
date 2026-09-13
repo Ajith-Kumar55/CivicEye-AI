@@ -7,6 +7,8 @@ os.environ["NUMEXPR_NUM_THREADS"] = "1"
 os.environ["CUDA_VISIBLE_DEVICES"] = ""
 os.environ["YOLO_OFFLINE"] = "true"
 os.environ["ULTRALYTICS_AUTOINSTALL"] = "false"
+os.environ["MALLOC_TRIM_THRESHOLD_"] = "65536"
+os.environ["MALLOC_MMAP_THRESHOLD_"] = "65536"
 
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
@@ -111,6 +113,13 @@ def get_model():
                     raise FileNotFoundError(f"YOLO model file not found at path: {model_path}")
 
                 print("[model] YOLO initialization starting")
+                import torch
+                torch.set_num_threads(1)
+                if hasattr(torch, "set_num_interop_threads"):
+                    try:
+                        torch.set_num_interop_threads(1)
+                    except Exception:
+                        pass
                 from ultralytics import YOLO
                 loaded_m = YOLO(model_path)
                 print("[model] YOLO object created")
