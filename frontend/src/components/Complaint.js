@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from "react";
 
+const API_BASE_URL = "https://civiceye-ai-backend.onrender.com";
+
 function Complaint({ results, location, setLocation, onSearchLocation }) {
 
   const [issue, setIssue] = useState("");
@@ -92,7 +94,7 @@ function Complaint({ results, location, setLocation, onSearchLocation }) {
     try {
       const storedUser = JSON.parse(localStorage.getItem("civiceye-user") || "{}");
 
-      await fetch("http://127.0.0.1:5000/api/complaint/submit", {
+      await fetch(`${API_BASE_URL}/api/complaint/submit`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

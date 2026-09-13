@@ -1,5 +1,4 @@
 import React from "react";
-
 import {
   FaTrash,
   FaCalendarAlt,
@@ -9,6 +8,8 @@ import {
   FaMapMarkerAlt
 } from "react-icons/fa";
 import StatusTimeline from "./StatusTimeline";
+
+const API_BASE_URL = "https://civiceye-ai-backend.onrender.com";
 
 
 function History({
@@ -35,7 +36,7 @@ function History({
       const userObj = JSON.parse(localStorage.getItem("civiceye-user") || "{}");
       const userEmail = userObj.email || item.citizen_email || "citizen@civiceye.com";
 
-      const res = await fetch(`http://127.0.0.1:5000/api/complaints/${item.id}`, {
+      const res = await fetch(`${API_BASE_URL}/api/complaints/${item.id}`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ user_email: userEmail })

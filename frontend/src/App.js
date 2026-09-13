@@ -14,7 +14,7 @@ import History from "./components/History";
 import ResolutionFeed from "./components/ResolutionFeed";
 import AdminDashboard from "./components/MunicipalityAdmin/AdminDashboard";
 
-const API_BASE_URL = "http://127.0.0.1:5000";
+const API_BASE_URL = "https://civiceye-ai-backend.onrender.com";
 const cleanIssueName = (issue) => {
   const name = String(issue || "").toLowerCase();
 
@@ -146,7 +146,7 @@ const startCamera = async () => {
     formData.append("image", selectedImage);
 
     try {
-setLoading(true);
+      setLoading(true);
       const response = await fetch(
         API_BASE_URL + "/detect",
         {
@@ -155,21 +155,31 @@ setLoading(true);
         }
       );
 
+      if (!response.ok) {
+        throw new Error(`Backend request failed with status: ${response.status}`);
+      }
+
       const data = await response.json();
 
       console.log(data);
 
-     const validDetections = (data.detections || [])
-  .filter((item) => Number(item.confidence) >= 80)
-  .map((item) => ({
-    ...item,
-    issue: cleanIssueName(item.issue),
-  }));
+      const validDetections = (data.detections || [])
+        .filter((item) => Number(item.confidence) >= 80)
+        .map((item) => ({
+          ...item,
+          issue: cleanIssueName(item.issue),
+        }));
 
-setResults(validDetections);
-      setPredictionImage(
-        data.prediction_image || ""
-      );
+      setResults(validDetections);
+
+      let imgUrl = data.prediction_image || "";
+      if (imgUrl.includes("127.0.0.1:5000") || imgUrl.includes("localhost:5000")) {
+        imgUrl = imgUrl.replace(/http:\/\/(127\.0\.0\.1|localhost):5000/, API_BASE_URL);
+      } else if (imgUrl.startsWith("/")) {
+        imgUrl = `${API_BASE_URL}${imgUrl}`;
+      }
+
+      setPredictionImage(imgUrl);
 
       fetchHistory();
       setLoading(false);
@@ -178,8 +188,8 @@ setResults(validDetections);
 
     catch (err) {
 
-      console.log(err);
-setLoading(false);
+      console.error("Upload error:", err);
+      setLoading(false);
       alert("Upload Failed");
 
     }
@@ -222,43 +232,61 @@ setLoading(false);
 
       async (blob) => {
 
-        const formData = new FormData();
+        try {
 
-        formData.append(
-          "image",
-          blob,
-          "capture.jpg"
-        );
+          const formData = new FormData();
 
-        const response = await fetch(
+          formData.append(
+            "image",
+            blob,
+            "capture.jpg"
+          );
 
-          API_BASE_URL + "/detect",
+          const response = await fetch(
 
-          {
-            method: "POST",
-            body: formData
+            API_BASE_URL + "/detect",
+
+            {
+              method: "POST",
+              body: formData
+            }
+
+          );
+
+          if (!response.ok) {
+            throw new Error(`Backend request failed with status: ${response.status}`);
           }
 
-        );
+          const data = await response.json();
 
-        const data = await response.json();
+          console.log(data);
 
-        console.log(data);
+          const validDetections = (data.detections || [])
+            .filter((item) => Number(item.confidence) >= 80)
+            .map((item) => ({
+              ...item,
+              issue: cleanIssueName(item.issue),
+            }));
 
-       const validDetections = (data.detections || [])
-  .filter((item) => Number(item.confidence) >= 80)
-  .map((item) => ({
-    ...item,
-    issue: cleanIssueName(item.issue),
-  }));
+          setResults(validDetections);
 
-setResults(validDetections);
+          let imgUrl = data.prediction_image || "";
+          if (imgUrl.includes("127.0.0.1:5000") || imgUrl.includes("localhost:5000")) {
+            imgUrl = imgUrl.replace(/http:\/\/(127\.0\.0\.1|localhost):5000/, API_BASE_URL);
+          } else if (imgUrl.startsWith("/")) {
+            imgUrl = `${API_BASE_URL}${imgUrl}`;
+          }
 
-        setPredictionImage(
-          data.prediction_image || ""
-        );
+          setPredictionImage(imgUrl);
 
-        fetchHistory();
+          fetchHistory();
+
+        } catch (err) {
+
+          console.error("Camera Detection Error:", err);
+          alert("Camera Detection Failed");
+
+        }
 
       },
 
@@ -303,6 +331,10 @@ const updateComplaintStatus = (index, newStatus) => {
           API_BASE_URL + "/history"
         );
 
+      if (!response.ok) {
+        throw new Error(`Backend request failed with status: ${response.status}`);
+      }
+
       const data = await response.json();
 
       setHistory(data);
@@ -311,7 +343,7 @@ const updateComplaintStatus = (index, newStatus) => {
 
     catch (err) {
 
-      console.log(err);
+      console.error("Fetch history error:", err);
 
     }
 

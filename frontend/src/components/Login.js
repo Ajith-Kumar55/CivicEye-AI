@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import "./Login.css";
 
-const API_BASE_URL = "http://127.0.0.1:5000";
+const API_BASE_URL = "https://civiceye-ai-backend.onrender.com";
 
 function Login({ onLogin }) {
   const [isLogin, setIsLogin] = useState(true);

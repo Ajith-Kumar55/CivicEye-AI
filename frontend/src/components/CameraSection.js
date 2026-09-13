@@ -1,5 +1,7 @@
 import React, { useRef, useState } from "react";
 
+const API_BASE_URL = "https://civiceye-ai-backend.onrender.com";
+
 function CameraSection({ onDetection }) {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
@@ -44,10 +46,14 @@ function CameraSection({ onDetection }) {
       formData.append("image", blob, "capture.jpg");
 
       try {
-        const response = await fetch("http://127.0.0.1:5000/detect", {
+        const response = await fetch(`${API_BASE_URL}/detect`, {
           method: "POST",
           body: formData,
         });
+
+        if (!response.ok) {
+          throw new Error(`Backend request failed with status: ${response.status}`);
+        }
 
         const data = await response.json();
 
@@ -55,6 +61,7 @@ function CameraSection({ onDetection }) {
           onDetection(data.detections);
         }
       } catch (err) {
+        console.error("Camera detection error:", err);
         alert("Detection failed.");
       }
     }, "image/jpeg");
