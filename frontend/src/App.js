@@ -18,16 +18,20 @@ const API_BASE_URL = "https://civiceye-ai-backend.onrender.com";
 const cleanIssueName = (issue) => {
   const name = String(issue || "").toLowerCase();
 
-  if (name.includes("water_leakage") || name.includes("water leakage")) {
-    return "water leakage";
+  if (name.includes("water") || name.includes("leak")) {
+    return "Water Leakage";
   }
 
   if (name.includes("pothole")) {
-    return "pothole";
+    return "Pothole";
   }
 
   if (name.includes("garbage")) {
-    return "garbage";
+    return "Garbage";
+  }
+
+  if (name.includes("no issue")) {
+    return "No Issue Detected";
   }
 
   return issue;
@@ -395,25 +399,24 @@ const updateComplaintStatus = (index, newStatus) => {
   report.style.lineHeight = "1.6";
 
   let action = "";
+  const issueStr = String(item.issue || "").toLowerCase();
 
-  if (
-    item.issue &&
-    item.issue.toLowerCase().includes("pothole")
-  ) {
+  if (issueStr.includes("pothole")) {
     action = kannada
       ? "ರಸ್ತೆ ನಿರ್ವಹಣೆ ಅಗತ್ಯ."
       : "Road Maintenance Required.";
-  } else if (
-    item.issue &&
-    item.issue.toLowerCase().includes("garbage")
-  ) {
+  } else if (issueStr.includes("garbage")) {
     action = kannada
       ? "ಪುರಸಭೆಯ ತ್ಯಾಜ್ಯ ಸಂಗ್ರಹಣೆ ಅಗತ್ಯ."
       : "Municipal Waste Collection Required.";
-  } else {
+  } else if (issueStr.includes("water") || issueStr.includes("leak")) {
     action = kannada
       ? "ನೀರು ಸರಬರಾಜು ಇಲಾಖೆಯ ಪರಿಶೀಲನೆ ಅಗತ್ಯ."
       : "Water Supply Department Inspection Required.";
+  } else {
+    action = kannada
+      ? "ಯಾವುದೇ ಕ್ರಮ ಅಗತ್ಯವಿಲ್ಲ."
+      : "No Action Required.";
   }
 
   report.innerHTML = `

@@ -67,6 +67,19 @@ def health():
 
 _model = None
 
+def normalize_issue_name(raw_label):
+    if not raw_label:
+        return "No Issue Detected"
+    lbl = str(raw_label).lower()
+    if "pothole" in lbl:
+        return "Pothole"
+    elif "garbage" in lbl:
+        return "Garbage"
+    elif "water" in lbl or "leak" in lbl:
+        return "Water Leakage"
+    else:
+        return "No Issue Detected"
+
 def get_model():
     global _model
     if _model is None:
@@ -74,7 +87,12 @@ def get_model():
         from ultralytics import YOLO
         model_path = os.path.join(BASE_DIR, "best.pt")
         _model = YOLO(model_path)
-        print("[YOLO] Model best.pt loaded successfully.")
+        if hasattr(_model, "names") and isinstance(_model.names, dict):
+            for k, v in list(_model.names.items()):
+                _model.names[k] = normalize_issue_name(v)
+        elif hasattr(_model, "names") and isinstance(_model.names, list):
+            _model.names = [normalize_issue_name(v) for v in _model.names]
+        print("[YOLO] Model best.pt loaded successfully with names:", getattr(_model, "names", None))
     return _model
 
 def init_db():
@@ -378,9 +396,10 @@ def detect():
                 class_id = int(box.cls[0])
                 confidence = round(float(box.conf[0]) * 100, 2)
 
-                issue = str(
+                raw_issue = str(
                     yolo_model.names[class_id]
                 ).strip()
+                issue = normalize_issue_name(raw_issue)
 
                 issue_lower = issue.lower()
 
