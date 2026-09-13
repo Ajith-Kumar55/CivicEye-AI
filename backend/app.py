@@ -5,15 +5,26 @@ from datetime import datetime
 import os
 import sqlite3
 import shutil
+import time
+from PIL import Image
+import numpy as np
 
 app = Flask(__name__)
 CORS(app)
 
 # =========================
-# LOAD MODEL
+# LOAD MODEL (ONCE ON STARTUP)
 # =========================
 
 model = YOLO("best.pt")
+
+# Warm up YOLO model at startup to pre-allocate PyTorch structures and reduce first-request latency
+try:
+    dummy_img = np.zeros((100, 100, 3), dtype=np.uint8)
+    model.predict(source=dummy_img, save=False, verbose=False, imgsz=640)
+    print("YOLO model loaded and warmed up successfully at startup.")
+except Exception as warmup_err:
+    print("YOLO model warmup notice:", warmup_err)
 
 # =========================
 # FOLDERS & DATABASE
@@ -254,6 +265,7 @@ def home():
 
 @app.route("/detect", methods=["POST"])
 def detect():
+    start_time = time.time()
     try:
         # -------------------------
         # CHECK IMAGE
@@ -273,17 +285,38 @@ def detect():
         filepath = os.path.join(UPLOAD_FOLDER, filename)
         file.save(filepath)
 
+        file_size = os.path.getsize(filepath)
+        print(f"[/detect] Received file: {filename}, size: {file_size} bytes")
+
         # -------------------------
-        # RUN YOLO
-        # IMPORTANT: DO NOT AUTO-SAVE
-        # YOLO result image
+        # OPTIMIZE IMAGE FOR MEMORY & INFERENCE
+        # Downscale large images (max 1024px) to prevent PyTorch OOM & Gunicorn timeout
         # -------------------------
+        try:
+            with Image.open(filepath) as img:
+                img_w, img_h = img.size
+                print(f"[/detect] Original resolution: {img_w}x{img_h}")
+                max_dim = 1024
+                if max(img_w, img_h) > max_dim:
+                    img.thumbnail((max_dim, max_dim), Image.Resampling.LANCZOS)
+                    img.save(filepath, quality=90)
+                    print(f"[/detect] Resized image to max {max_dim}px (new size: {img.size[0]}x{img.size[1]})")
+        except Exception as img_err:
+            print("[/detect] Image optimization notice:", img_err)
+
+        # -------------------------
+        # RUN YOLO INFERENCE
+        # -------------------------
+        inf_start = time.time()
         results = model.predict(
             source=filepath,
             save=False,
             conf=0.60,
+            imgsz=640,
             verbose=False
         )
+        inf_duration = time.time() - inf_start
+        print(f"[/detect] YOLO inference finished in {inf_duration:.2f}s")
 
         detections = []
         valid_results = []
@@ -514,12 +547,13 @@ def detect():
         )
 
         # -------------------------
-        # PREDICTION URL
+        # PREDICTION URL (DYNAMIC HOST)
         # -------------------------
-        prediction_url = (
-            f"http://127.0.0.1:5000/prediction/"
-            f"{prediction_image}"
-        )
+        host_url = request.host_url.rstrip('/')
+        prediction_url = f"{host_url}/prediction/{prediction_image}"
+
+        total_duration = time.time() - start_time
+        print(f"[/detect] Request completed in {total_duration:.2f}s with {len(detections)} detection(s)")
 
         # -------------------------
         # SEND RESPONSE
@@ -532,7 +566,7 @@ def detect():
     except Exception as e:
 
         print(
-            "Detection error:",
+            "[/detect] Detection error:",
             e
         )
 
@@ -852,7 +886,7 @@ def resolve_admin_complaint(complaint_id):
                 filename = f"resolution_{complaint_id}_{file.filename}"
                 filepath = os.path.join(UPLOAD_FOLDER, filename)
                 file.save(filepath)
-                resolution_image_url = f"http://127.0.0.1:5000/uploads/{filename}"
+                resolution_image_url = f"{request.host_url.rstrip('/')}/uploads/{filename}"
 
         resolution_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -1020,7 +1054,7 @@ def create_admin_feed_post():
                 filename = f"feed_{int(datetime.now().timestamp())}_{file.filename}"
                 filepath = os.path.join(UPLOAD_FOLDER, filename)
                 file.save(filepath)
-                resolution_image_url = f"http://127.0.0.1:5000/uploads/{filename}"
+                resolution_image_url = f"{request.host_url.rstrip('/')}/uploads/{filename}"
 
         date_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
