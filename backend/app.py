@@ -354,25 +354,32 @@ def detect():
         # -------------------------
         prep_start = time.time()
         try:
+            needs_resave = False
             with Image.open(filepath) as img:
+                img.load()
                 img_w, img_h = img.size
                 max_dim = 800
                 if max(img_w, img_h) > max_dim:
+                    img = img.convert("RGB")
                     img.thumbnail((max_dim, max_dim), Image.Resampling.BILINEAR)
-                    img.save(filepath, quality=85)
+                    needs_resave = True
+            if needs_resave:
+                img.save(filepath, format="JPEG", quality=85)
         except Exception as img_err:
             print("[detect] Image optimization notice:", img_err)
         prep_time = time.time() - prep_start
-        print(f"[detect] preprocessing: {prep_time:.2f}s")
+        print(f"[detect] preprocessing complete: {prep_time:.2f}s")
 
         # -------------------------
-        # RUN YOLO INFERENCE (LAZY MODEL GETTER, CPU, IMGSZ=416)
+        # RUN YOLO INFERENCE (LAZY MODEL GETTER, CPU, IMGSZ=416, CONF=0.25)
         # -------------------------
         model_start = time.time()
+        print("[detect] loading model")
         yolo_model = get_model()
         model_time = time.time() - model_start
-        print(f"[detect] model loading: {model_time:.2f}s")
+        print(f"[detect] model ready ({model_time:.2f}s)")
 
+        print("[detect] inference started")
         inf_start = time.time()
         import torch
         torch.set_num_threads(1)
@@ -380,15 +387,15 @@ def detect():
             results = yolo_model.predict(
                 source=filepath,
                 save=False,
-                conf=0.60,
+                conf=0.25,
                 imgsz=416,
                 device='cpu',
                 verbose=False
             )
         inf_duration = time.time() - inf_start
-        print(f"[detect] inference: {inf_duration:.2f}s")
+        print(f"[detect] inference finished: {inf_duration:.2f}s")
 
-        res_start = time.time()
+        filter_start = time.time()
         detections = []
         valid_results = []
 
@@ -448,24 +455,22 @@ def detect():
 
                 if "water" in issue_lower:
                     # Reject narrow vertical standing person selfies while accepting genuine water leakage photos
-                    if area_ratio >= 0.65 and height_ratio >= 0.90 and width_ratio <= 0.35:
+                    if area_ratio >= 0.70 and height_ratio >= 0.92 and width_ratio <= 0.30:
                         suspicious_detection = True
                         reject_reason = "water_leakage_narrow_person_selfie"
-                    elif area_ratio >= 0.98 and height_ratio >= 0.98 and width_ratio >= 0.98:
+                    elif area_ratio >= 0.99 and height_ratio >= 0.99 and width_ratio >= 0.99:
                         suspicious_detection = True
                         reject_reason = "water_leakage_full_frame_artifact"
                 elif "garbage" in issue_lower:
-                    if area_ratio >= 0.92 and height_ratio >= 0.95:
+                    if area_ratio >= 0.98 and height_ratio >= 0.98 and width_ratio >= 0.98:
                         suspicious_detection = True
                         reject_reason = "garbage_full_frame_filter"
                 elif "pothole" in issue_lower:
-                    # Potholes can cover large areas of close-up road photos safely.
-                    # Only reject if bounding box is full frame edge-to-edge artifact.
                     if area_ratio >= 0.98 and height_ratio >= 0.98 and width_ratio >= 0.98:
                         suspicious_detection = True
                         reject_reason = "pothole_full_frame_filter"
                 else:
-                    if area_ratio >= 0.95:
+                    if area_ratio >= 0.98:
                         suspicious_detection = True
                         reject_reason = "generic_extreme_area_filter"
 
@@ -506,6 +511,9 @@ def detect():
 
                 if result not in valid_results:
                     valid_results.append(result)
+
+        filter_time = time.time() - filter_start
+        print(f"[detect] filtering finished: {filter_time:.2f}s")
 
         # -------------------------
         # CREATE PREDICTION FOLDER
@@ -589,8 +597,7 @@ def detect():
 
             detections.append(detection)
 
-        res_time = time.time() - res_start
-        print(f"[detect] result processing: {res_time:.2f}s")
+        print(f"[detect] prediction image saved: {prediction_image}")
 
         # -------------------------
         # SAVE HISTORY
@@ -605,11 +612,11 @@ def detect():
             strongest_detection
         )
 
-        save_complaint_to_db(
+        complaint_id = save_complaint_to_db(
             strongest_detection
         )
         db_time = time.time() - db_start
-        print(f"[detect] database: {db_time:.2f}s")
+        print(f"[detect] database saved (complaint_id={complaint_id}, time={db_time:.2f}s)")
 
         # -------------------------
         # PREDICTION URL (DYNAMIC HOST)
@@ -618,7 +625,7 @@ def detect():
         prediction_url = f"{host_url}/prediction/{prediction_image}"
 
         total_duration = time.time() - start_time
-        print(f"[detect] total: {total_duration:.2f}s")
+        print(f"[detect] RESPONSE SENT (TOTAL TIME: {total_duration:.2f}s)")
 
         gc.collect()
 
@@ -633,7 +640,7 @@ def detect():
     except Exception as e:
 
         print(
-            "[/detect] Detection error:",
+            "[detect] ERROR:",
             e
         )
 

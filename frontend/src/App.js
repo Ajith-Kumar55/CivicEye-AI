@@ -172,6 +172,9 @@ const startCamera = async () => {
     setResults([]);
     setPredictionImage("");
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 90000); // 90-second timeout
+
     const formData = new FormData();
     formData.append("image", selectedImage);
 
@@ -181,7 +184,8 @@ const startCamera = async () => {
         API_BASE_URL + "/detect",
         {
           method: "POST",
-          body: formData
+          body: formData,
+          signal: controller.signal
         }
       );
 
@@ -215,16 +219,20 @@ const startCamera = async () => {
 
       setPredictionImage(imgUrl);
       fetchHistory();
-      setLoading(false);
 
     } catch (err) {
       console.error("[Upload] Detection failed:", err);
-      setLoading(false);
       setResults([]);
       setPredictionImage("");
-      alert(kannada ? "ಪತ್ತೆಹಚ್ಚುವುದು ವಿಫಲವಾಗಿದೆ. ದಯವಿಟ್ಟು ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ." : "Detection failed. Please try the image again.");
+      if (err.name === "AbortError") {
+        alert(kannada ? "ಶೋಧನೆ ಸಮಯ ಮೀರಿದೆ. ದಯವಿಟ್ಟು ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ." : "Detection timed out. Please try again.");
+      } else {
+        alert(kannada ? "ಪತ್ತೆಹಚ್ಚುವುದು ವಿಫಲವಾಗಿದೆ. ದಯವಿಟ್ಟು ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ." : "Detection failed. Please try the image again.");
+      }
+    } finally {
+      clearTimeout(timeoutId);
+      setLoading(false);
     }
-
   };
 
   // ======================
@@ -235,6 +243,11 @@ const startCamera = async () => {
 
     if (!cameraOn) {
       alert("Start camera first");
+      return;
+    }
+
+    if (loading) {
+      console.log("[Camera] Detection already in progress, skipping duplicate request.");
       return;
     }
 
@@ -253,6 +266,9 @@ const startCamera = async () => {
       canvas.height
     );
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 90000); // 90-second timeout
+
     canvas.toBlob(
       async (blob) => {
         // Clear previous detection results and prediction image before sending request
@@ -260,6 +276,7 @@ const startCamera = async () => {
         setPredictionImage("");
 
         try {
+          setLoading(true);
           const formData = new FormData();
           formData.append(
             "image",
@@ -271,12 +288,20 @@ const startCamera = async () => {
             API_BASE_URL + "/detect",
             {
               method: "POST",
-              body: formData
+              body: formData,
+              signal: controller.signal
             }
           );
 
           if (!response.ok) {
-            throw new Error(`Backend request failed with status: ${response.status}`);
+            let errDetails = "";
+            try {
+              const errData = await response.json();
+              errDetails = errData.error || JSON.stringify(errData);
+            } catch (_) {
+              errDetails = await response.text().catch(() => "");
+            }
+            throw new Error(`Backend /detect returned status ${response.status}: ${errDetails}`);
           }
 
           const data = await response.json();
@@ -300,10 +325,17 @@ const startCamera = async () => {
           fetchHistory();
 
         } catch (err) {
-          console.error("Camera Detection Error:", err);
+          console.error("[Camera] Detection failed:", err);
           setResults([]);
           setPredictionImage("");
-          alert(kannada ? "ಕ್ಯಾಮೆರಾ ಪತ್ತೆಹಚ್ಚುವಿಕೆ ವಿಫಲವಾಗಿದೆ. ದಯವಿಟ್ಟು ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ." : "Camera Detection Failed. Please try again.");
+          if (err.name === "AbortError") {
+            alert(kannada ? "ಶೋಧನೆ ಸಮಯ ಮೀರಿದೆ. ದಯವಿಟ್ಟು ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ." : "Detection timed out. Please try again.");
+          } else {
+            alert(kannada ? "ಕ್ಯಾಮೆರಾ ಪತ್ತೆಹಚ್ಚುವಿಕೆ ವಿಫಲವಾಗಿದೆ. ದಯವಿಟ್ಟು ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ." : "Camera Detection Failed. Please try again.");
+          }
+        } finally {
+          clearTimeout(timeoutId);
+          setLoading(false);
         }
       },
       "image/jpeg"
