@@ -17,8 +17,18 @@ import sqlite3
 import shutil
 import time
 import gc
+import ctypes
 import threading
 from PIL import Image
+
+def trim_memory():
+    gc.collect()
+    try:
+        libc = ctypes.CDLL("libc.so.6")
+        libc.malloc_trim(0)
+    except Exception:
+        pass
+
 
 app = Flask(__name__)
 
@@ -135,6 +145,7 @@ def get_model():
                 print("[model] CPU configuration complete")
                 print(f"[model] model load complete in {load_time:.2f}s")
                 print(f"[detect] model loading finished in {load_time:.2f}s with names: {getattr(_model, 'names', None)}")
+                trim_memory()
     return _model
 
 def init_db():
@@ -398,14 +409,14 @@ def detect():
 
         # -------------------------
         # OPTIMIZE IMAGE FOR MEMORY & INFERENCE
-        # Downscale large images (max 640px) to prevent PyTorch OOM & Gunicorn 502 OOM crash
+        # Downscale large images (max 416px) to prevent PyTorch OOM & Gunicorn 502 OOM crash
         # -------------------------
         print("[detect] preprocessing started")
         prep_start = time.time()
         try:
             with Image.open(filepath) as img:
                 img_w, img_h = img.size
-                max_dim = 640
+                max_dim = 416
                 if max(img_w, img_h) > max_dim:
                     img = img.convert("RGB")
                     img.thumbnail((max_dim, max_dim), Image.Resampling.BILINEAR)
@@ -415,7 +426,7 @@ def detect():
         prep_time = time.time() - prep_start
         print(f"[detect] preprocessing finished in {prep_time:.2f}s")
 
-        gc.collect()
+        trim_memory()
 
         # -------------------------
         # RUN YOLO INFERENCE (LAZY MODEL GETTER, CPU, IMGSZ=416, CONF=0.25)
@@ -446,7 +457,7 @@ def detect():
             )
         inf_duration = time.time() - inf_start
         print(f"[detect] inference finished in {inf_duration:.2f}s")
-        gc.collect()
+        trim_memory()
 
         filter_start = time.time()
         detections = []
@@ -674,10 +685,13 @@ def detect():
         host_url = request.host_url.rstrip('/')
         prediction_url = f"{host_url}/prediction/{prediction_image}"
 
-        total_duration = time.time() - start_time
-        print(f"[detect] RESPONSE SENT (TOTAL TIME: {total_duration:.2f}s)")
+        try:
+            del results
+            del valid_results
+        except Exception:
+            pass
 
-        gc.collect()
+        trim_memory()
 
         # -------------------------
         # SEND RESPONSE
