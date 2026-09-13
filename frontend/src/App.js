@@ -36,6 +36,28 @@ const cleanIssueName = (issue) => {
 
   return issue;
 };
+
+const getSuggestedAction = (issue, kannada = false) => {
+  const str = String(issue || "").toLowerCase();
+  if (str.includes("pothole")) {
+    return kannada
+      ? "ರಸ್ತೆ ನಿರ್ವಹಣೆ ಮತ್ತು ರಸ್ತೆ ಮೇಲ್ಮೈ ಪರಿಶೀಲನೆ ಅಗತ್ಯ."
+      : "Repair / fill the pothole and inspect the road surface.";
+  }
+  if (str.includes("garbage")) {
+    return kannada
+      ? "ತ್ಯಾಜ್ಯವನ್ನು ತೆಗೆದುಹಾಕಿ ಮತ್ತು ಪೀಡಿತ ಪ್ರದೇಶವನ್ನು ಸ್ವಚ್ಛಗೊಳಿಸಿ."
+      : "Remove the garbage and clean the affected area.";
+  }
+  if (str.includes("water") || str.includes("leak")) {
+    return kannada
+      ? "ನೀರು ಸೋರಿಕೆಯನ್ನು ಪರಿಶೀಲಿಸಿ ಮತ್ತು ಪೈಪ್‌ಲೈನ್ ದುರಸ್ತಿ ಮಾಡಿ."
+      : "Inspect and repair the water leakage / damaged pipeline.";
+  }
+  return kannada
+    ? "ಯಾವುದೇ ಕ್ರಮ ಅಗತ್ಯವಿಲ್ಲ."
+    : "No action required.";
+};
 function App() {
 
   // ======================
@@ -138,15 +160,16 @@ const startCamera = async () => {
   const uploadImage = async () => {
 
     if (!selectedImage) {
-
       alert("Select image first");
-
       return;
+    }
 
+    if (loading) {
+      console.log("[Upload] Detection already in progress, skipping duplicate request.");
+      return;
     }
 
     const formData = new FormData();
-
     formData.append("image", selectedImage);
 
     try {
@@ -164,15 +187,12 @@ const startCamera = async () => {
       }
 
       const data = await response.json();
-
       console.log(data);
 
-      const validDetections = (data.detections || [])
-        .filter((item) => Number(item.confidence) >= 80)
-        .map((item) => ({
-          ...item,
-          issue: cleanIssueName(item.issue),
-        }));
+      const validDetections = (data.detections || []).map((item) => ({
+        ...item,
+        issue: cleanIssueName(item.issue),
+      }));
 
       setResults(validDetections);
 
@@ -184,18 +204,13 @@ const startCamera = async () => {
       }
 
       setPredictionImage(imgUrl);
-
       fetchHistory();
       setLoading(false);
 
-    }
-
-    catch (err) {
-
-      console.error("Upload error:", err);
+    } catch (err) {
+      console.error("[Upload] /detect failed:", err);
       setLoading(false);
       alert("Upload Failed");
-
     }
 
   };
@@ -207,21 +222,15 @@ const startCamera = async () => {
   const captureImage = async () => {
 
     if (!cameraOn) {
-
       alert("Start camera first");
-
       return;
-
     }
 
     const video = videoRef.current;
-
     const canvas = canvasRef.current;
-
     const context = canvas.getContext("2d");
 
     canvas.width = video.videoWidth;
-
     canvas.height = video.videoHeight;
 
     context.drawImage(
@@ -233,13 +242,9 @@ const startCamera = async () => {
     );
 
     canvas.toBlob(
-
       async (blob) => {
-
         try {
-
           const formData = new FormData();
-
           formData.append(
             "image",
             blob,
@@ -247,14 +252,11 @@ const startCamera = async () => {
           );
 
           const response = await fetch(
-
             API_BASE_URL + "/detect",
-
             {
               method: "POST",
               body: formData
             }
-
           );
 
           if (!response.ok) {
@@ -262,15 +264,12 @@ const startCamera = async () => {
           }
 
           const data = await response.json();
-
           console.log(data);
 
-          const validDetections = (data.detections || [])
-            .filter((item) => Number(item.confidence) >= 80)
-            .map((item) => ({
-              ...item,
-              issue: cleanIssueName(item.issue),
-            }));
+          const validDetections = (data.detections || []).map((item) => ({
+            ...item,
+            issue: cleanIssueName(item.issue),
+          }));
 
           setResults(validDetections);
 
@@ -282,20 +281,14 @@ const startCamera = async () => {
           }
 
           setPredictionImage(imgUrl);
-
           fetchHistory();
 
         } catch (err) {
-
           console.error("Camera Detection Error:", err);
           alert("Camera Detection Failed");
-
         }
-
       },
-
       "image/jpeg"
-
     );
 
   };
@@ -398,26 +391,7 @@ const updateComplaintStatus = (index, newStatus) => {
   report.style.fontSize = "16px";
   report.style.lineHeight = "1.6";
 
-  let action = "";
-  const issueStr = String(item.issue || "").toLowerCase();
-
-  if (issueStr.includes("pothole")) {
-    action = kannada
-      ? "ರಸ್ತೆ ನಿರ್ವಹಣೆ ಅಗತ್ಯ."
-      : "Road Maintenance Required.";
-  } else if (issueStr.includes("garbage")) {
-    action = kannada
-      ? "ಪುರಸಭೆಯ ತ್ಯಾಜ್ಯ ಸಂಗ್ರಹಣೆ ಅಗತ್ಯ."
-      : "Municipal Waste Collection Required.";
-  } else if (issueStr.includes("water") || issueStr.includes("leak")) {
-    action = kannada
-      ? "ನೀರು ಸರಬರಾಜು ಇಲಾಖೆಯ ಪರಿಶೀಲನೆ ಅಗತ್ಯ."
-      : "Water Supply Department Inspection Required.";
-  } else {
-    action = kannada
-      ? "ಯಾವುದೇ ಕ್ರಮ ಅಗತ್ಯವಿಲ್ಲ."
-      : "No Action Required.";
-  }
+  const action = getSuggestedAction(item.issue, kannada);
 
   report.innerHTML = `
     <div style="
@@ -433,7 +407,7 @@ const updateComplaintStatus = (index, newStatus) => {
       <p style="margin-bottom:0;">
         ${
           kannada
-            ? "ಸ್ಮಾರ್ಟ್ ಸಾರ್ವಜನಿಕ ಸಮಸ್ಯೆ ಪತ್ತೆ ವರದಿ"
+            ? "ಸ್ಮಾರ್ಟ್ ಸಾರ್ವಜನಿಕ समस्या ಪತ್ತೆ ವರದಿ"
             : "Smart Public Issue Detection Report"
         }
       </p>
@@ -529,7 +503,8 @@ const updateComplaintStatus = (index, newStatus) => {
   try {
 
     const canvas = await html2canvas(report, {
-      scale: 2,
+      scale: 1.5,
+      logging: false,
       useCORS: true,
       backgroundColor: "#ffffff"
     });
@@ -591,17 +566,7 @@ const updateComplaintStatus = (index, newStatus) => {
         pageHeight - margin * 2;
     }
 
-    const pdfBlob = pdf.output("blob");
-const downloadUrl = URL.createObjectURL(pdfBlob);
-
-const link = document.createElement("a");
-link.href = downloadUrl;
-link.download = `CivicEye_Report_${item.issue || "Detection"}.pdf`;
-document.body.appendChild(link);
-link.click();
-document.body.removeChild(link);
-
-URL.revokeObjectURL(downloadUrl);
+    pdf.save(`CivicEye_Report_${item.issue || "Detection"}.pdf`);
 
   } catch (error) {
 
@@ -1040,31 +1005,7 @@ return (
             </b>
 
             
-           {
-  item.issue === "pothole"
-    ? (
-        kannada
-          ? " ರಸ್ತೆ ನಿರ್ವಹಣೆ ಅಗತ್ಯ"
-          : " Road Maintenance Required"
-      )
-    : item.issue === "garbage"
-    ? (
-        kannada
-          ? " ತ್ಯಾಜ್ಯ ಸಂಗ್ರಹಣೆ ಅಗತ್ಯ"
-          : " Waste Collection Required"
-      )
-    : item.issue === "water leakage"
-    ? (
-        kannada
-          ? " ನೀರು ಸರಬರಾಜು ಇಲಾಖೆಯ ಪರಿಶೀಲನೆ ಅಗತ್ಯ"
-          : " Water Supply Department Required"
-      )
-    : (
-        kannada
-          ? " ಯಾವುದೇ ಕ್ರಮ ಅಗತ್ಯವಿಲ್ಲ"
-          : " No action required"
-      )
-}
+            {" " + getSuggestedAction(item.issue, kannada)}
 
           </p>
 

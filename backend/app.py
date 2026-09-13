@@ -342,7 +342,7 @@ def detect():
         file.save(filepath)
 
         file_size = os.path.getsize(filepath)
-        print(f"[/detect] Received file: {filename}, size: {file_size} bytes")
+        print(f"[detect] upload received: {filename} ({file_size} bytes)")
 
         if file_size > 10 * 1024 * 1024:
             os.remove(filepath)
@@ -350,36 +350,42 @@ def detect():
 
         # -------------------------
         # OPTIMIZE IMAGE FOR MEMORY & INFERENCE
-        # Downscale large images (max 1024px) to prevent PyTorch OOM & Gunicorn timeout
+        # Downscale large images (max 800px) to prevent PyTorch OOM & Gunicorn timeout
         # -------------------------
+        prep_start = time.time()
         try:
             with Image.open(filepath) as img:
                 img_w, img_h = img.size
-                print(f"[/detect] Original resolution: {img_w}x{img_h}")
-                max_dim = 1024
+                max_dim = 800
                 if max(img_w, img_h) > max_dim:
-                    img.thumbnail((max_dim, max_dim), Image.Resampling.LANCZOS)
-                    img.save(filepath, quality=90)
-                    print(f"[/detect] Resized image to max {max_dim}px (new size: {img.size[0]}x{img.size[1]})")
+                    img.thumbnail((max_dim, max_dim), Image.Resampling.BILINEAR)
+                    img.save(filepath, quality=85)
         except Exception as img_err:
-            print("[/detect] Image optimization notice:", img_err)
+            print("[detect] Image optimization notice:", img_err)
+        prep_time = time.time() - prep_start
+        print(f"[detect] image preprocessing time: {prep_time:.2f}s")
 
         # -------------------------
         # RUN YOLO INFERENCE (LAZY MODEL GETTER, CPU, IMGSZ=416)
         # -------------------------
+        model_start = time.time()
         yolo_model = get_model()
+        model_time = time.time() - model_start
+        print(f"[detect] model loading time: {model_time:.2f}s")
 
         inf_start = time.time()
-        results = yolo_model.predict(
-            source=filepath,
-            save=False,
-            conf=0.60,
-            imgsz=416,
-            device='cpu',
-            verbose=False
-        )
+        import torch
+        with torch.no_grad():
+            results = yolo_model.predict(
+                source=filepath,
+                save=False,
+                conf=0.60,
+                imgsz=416,
+                device='cpu',
+                verbose=False
+            )
         inf_duration = time.time() - inf_start
-        print(f"[/detect] YOLO inference finished in {inf_duration:.2f}s")
+        print(f"[detect] YOLO inference time: {inf_duration:.2f}s")
 
         detections = []
         valid_results = []
@@ -597,6 +603,7 @@ def detect():
         # -------------------------
         # SAVE HISTORY
         # -------------------------
+        db_start = time.time()
         strongest_detection = max(
             detections,
             key=lambda x: x["confidence"]
@@ -609,6 +616,8 @@ def detect():
         save_complaint_to_db(
             strongest_detection
         )
+        db_time = time.time() - db_start
+        print(f"[detect] database save time: {db_time:.2f}s")
 
         # -------------------------
         # PREDICTION URL (DYNAMIC HOST)
@@ -617,7 +626,7 @@ def detect():
         prediction_url = f"{host_url}/prediction/{prediction_image}"
 
         total_duration = time.time() - start_time
-        print(f"[/detect] Request completed in {total_duration:.2f}s with {len(detections)} detection(s)")
+        print(f"[detect] total request time: {total_duration:.2f}s")
 
         gc.collect()
 
