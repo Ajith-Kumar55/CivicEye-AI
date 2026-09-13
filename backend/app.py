@@ -1,13 +1,18 @@
+import os
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
+os.environ["VECLIB_MAXIMUM_THREADS"] = "1"
+os.environ["NUMEXPR_NUM_THREADS"] = "1"
+
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
-from ultralytics import YOLO
 from datetime import datetime
-import os
 import sqlite3
 import shutil
 import time
+import gc
 from PIL import Image
-import numpy as np
 
 app = Flask(__name__)
 
@@ -41,19 +46,24 @@ def add_cors_headers(response):
         response.headers["Access-Control-Allow-Origin"] = "https://civiceye-ai-frontend-v2.onrender.com"
     return response
 
+@app.route("/health", methods=["GET"])
+def health():
+    return jsonify({"status": "ok"}), 200
+
 # =========================
-# LOAD MODEL (ONCE ON STARTUP)
+# LAZY MODEL LOADING
 # =========================
 
-model = YOLO("best.pt")
+_model = None
 
-# Warm up YOLO model at startup to pre-allocate PyTorch structures and reduce first-request latency
-try:
-    dummy_img = np.zeros((100, 100, 3), dtype=np.uint8)
-    model.predict(source=dummy_img, save=False, verbose=False, imgsz=640)
-    print("YOLO model loaded and warmed up successfully at startup.")
-except Exception as warmup_err:
-    print("YOLO model warmup notice:", warmup_err)
+def get_model():
+    global _model
+    if _model is None:
+        print("[YOLO] Loading model best.pt lazily on demand...")
+        from ultralytics import YOLO
+        _model = YOLO(os.path.join(BASE_DIR, "best.pt"))
+        print("[YOLO] Model best.pt loaded successfully.")
+    return _model
 
 # =========================
 # FOLDERS & DATABASE
@@ -334,10 +344,12 @@ def detect():
             print("[/detect] Image optimization notice:", img_err)
 
         # -------------------------
-        # RUN YOLO INFERENCE
+        # RUN YOLO INFERENCE (LAZY MODEL GETTER)
         # -------------------------
+        yolo_model = get_model()
+
         inf_start = time.time()
-        results = model.predict(
+        results = yolo_model.predict(
             source=filepath,
             save=False,
             conf=0.60,
@@ -363,7 +375,7 @@ def detect():
                 confidence = round(float(box.conf[0]) * 100, 2)
 
                 issue = str(
-                    model.names[class_id]
+                    yolo_model.names[class_id]
                 ).strip()
 
                 issue_lower = issue.lower()
@@ -583,6 +595,8 @@ def detect():
 
         total_duration = time.time() - start_time
         print(f"[/detect] Request completed in {total_duration:.2f}s with {len(detections)} detection(s)")
+
+        gc.collect()
 
         # -------------------------
         # SEND RESPONSE
