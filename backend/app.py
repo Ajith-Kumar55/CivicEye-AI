@@ -389,26 +389,24 @@ def detect():
 
         # -------------------------
         # OPTIMIZE IMAGE FOR MEMORY & INFERENCE
-        # Downscale large images (max 800px) to prevent PyTorch OOM & Gunicorn timeout
+        # Downscale large images (max 640px) to prevent PyTorch OOM & Gunicorn 502 OOM crash
         # -------------------------
         print("[detect] preprocessing started")
         prep_start = time.time()
         try:
-            needs_resave = False
             with Image.open(filepath) as img:
-                img.load()
                 img_w, img_h = img.size
-                max_dim = 800
+                max_dim = 640
                 if max(img_w, img_h) > max_dim:
                     img = img.convert("RGB")
                     img.thumbnail((max_dim, max_dim), Image.Resampling.BILINEAR)
-                    needs_resave = True
-            if needs_resave:
-                img.save(filepath, format="JPEG", quality=85)
+                    img.save(filepath, format="JPEG", quality=80)
         except Exception as img_err:
             print("[detect] Image optimization notice:", img_err)
         prep_time = time.time() - prep_start
         print(f"[detect] preprocessing finished in {prep_time:.2f}s")
+
+        gc.collect()
 
         # -------------------------
         # RUN YOLO INFERENCE (LAZY MODEL GETTER, CPU, IMGSZ=416, CONF=0.25)
@@ -422,6 +420,12 @@ def detect():
         inf_start = time.time()
         import torch
         torch.set_num_threads(1)
+        if hasattr(torch, "set_num_interop_threads"):
+            try:
+                torch.set_num_interop_threads(1)
+            except Exception:
+                pass
+
         with torch.no_grad():
             results = yolo_model.predict(
                 source=filepath,
@@ -433,6 +437,7 @@ def detect():
             )
         inf_duration = time.time() - inf_start
         print(f"[detect] inference finished in {inf_duration:.2f}s")
+        gc.collect()
 
         filter_start = time.time()
         detections = []
