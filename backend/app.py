@@ -26,26 +26,24 @@ ALLOWED_ORIGINS = [
 
 CORS(
     app,
-    resources={
-        r"/*": {
-            "origins": ALLOWED_ORIGINS,
-            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-            "allow_headers": ["Content-Type", "Authorization"]
-        }
-    }
+    origins=ALLOWED_ORIGINS,
+    methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
+    expose_headers=["Content-Type"],
+    supports_credentials=False
 )
+
 
 @app.after_request
 def add_cors_headers(response):
     origin = request.headers.get("Origin")
+
     if origin in ALLOWED_ORIGINS:
         response.headers["Access-Control-Allow-Origin"] = origin
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
         response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-    elif not response.headers.get("Access-Control-Allow-Origin"):
-        response.headers["Access-Control-Allow-Origin"] = "https://civiceye-ai-frontend-v2.onrender.com"
-    return response
 
+    return response
 @app.route("/health", methods=["GET"])
 def health():
     return jsonify({"status": "ok"}), 200
