@@ -410,18 +410,18 @@ def detect():
 
         # -------------------------
         # OPTIMIZE IMAGE FOR MEMORY & INFERENCE
-        # Downscale large images (max 416px) to prevent PyTorch OOM & Gunicorn 502 OOM crash
+        # Downscale large images (max 320px) to prevent PyTorch OOM & Gunicorn 502 OOM crash
         # -------------------------
         print("[detect] preprocessing started")
         prep_start = time.time()
         try:
             with Image.open(filepath) as img:
                 img_w, img_h = img.size
-                max_dim = 416
+                max_dim = 320
                 if max(img_w, img_h) > max_dim:
-                    img = img.convert("RGB")
-                    img.thumbnail((max_dim, max_dim), Image.Resampling.BILINEAR)
-                    img.save(filepath, format="JPEG", quality=80)
+                    with img.convert("RGB") as img_rgb:
+                        img_rgb.thumbnail((max_dim, max_dim), Image.Resampling.BILINEAR)
+                        img_rgb.save(filepath, format="JPEG", quality=75)
         except Exception as img_err:
             print("[detect] Image optimization notice:", img_err)
         prep_time = time.time() - prep_start
@@ -430,7 +430,7 @@ def detect():
         trim_memory()
 
         # -------------------------
-        # RUN YOLO INFERENCE (LAZY MODEL GETTER, CPU, IMGSZ=416, CONF=0.25)
+        # RUN YOLO INFERENCE (LAZY MODEL GETTER, CPU, IMGSZ=320, CONF=0.25)
         # -------------------------
         model_start = time.time()
         yolo_model = get_model()
@@ -452,7 +452,7 @@ def detect():
                 source=filepath,
                 save=False,
                 conf=0.25,
-                imgsz=416,
+                imgsz=320,
                 device='cpu',
                 verbose=False
             )
