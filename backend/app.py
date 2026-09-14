@@ -21,6 +21,14 @@ import ctypes
 import threading
 from PIL import Image
 
+try:
+    import cv2
+    FACE_CASCADE = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+except Exception as face_init_err:
+    print("[app] OpenCV face cascade initialization notice:", face_init_err)
+    cv2 = None
+    FACE_CASCADE = None
+
 def trim_memory():
     gc.collect()
     try:
@@ -525,33 +533,68 @@ def detect():
                 # -------------------------
                 suspicious_detection = False
                 reject_reason = "None"
+                face_indicator = "No face"
 
-                if "water" in issue_lower:
-                    # Reject narrow vertical standing person selfies while accepting genuine water leakage photos
-                    if area_ratio >= 0.70 and height_ratio >= 0.92 and width_ratio <= 0.30:
-                        suspicious_detection = True
-                        reject_reason = "water_leakage_narrow_person_selfie"
-                    elif area_ratio >= 0.99 and height_ratio >= 0.99 and width_ratio >= 0.99:
-                        suspicious_detection = True
-                        reject_reason = "water_leakage_full_frame_artifact"
-                elif "garbage" in issue_lower:
-                    if area_ratio >= 0.98 and height_ratio >= 0.98 and width_ratio >= 0.98:
-                        suspicious_detection = True
-                        reject_reason = "garbage_full_frame_filter"
-                elif "pothole" in issue_lower:
-                    if area_ratio >= 0.98 and height_ratio >= 0.98 and width_ratio >= 0.98:
-                        suspicious_detection = True
-                        reject_reason = "pothole_full_frame_filter"
-                else:
-                    if area_ratio >= 0.98:
-                        suspicious_detection = True
-                        reject_reason = "generic_extreme_area_filter"
+                # Lightweight OpenCV face detection
+                has_prominent_face = False
+                has_large_face = False
 
-                print(
-                    f"[detect] candidate: issue={issue} confidence={confidence}% "
-                    f"area_ratio={area_ratio:.2f} width_ratio={width_ratio:.2f} height_ratio={height_ratio:.2f} "
-                    f"accepted={not suspicious_detection} reason={reject_reason}"
-                )
+                if cv2 is not None and FACE_CASCADE is not None and not FACE_CASCADE.empty():
+                    try:
+                        cv_img = cv2.imread(filepath)
+                        if cv_img is not None:
+                            gray = cv2.cvtColor(cv_img, cv2.COLOR_BGR2GRAY)
+                            faces = FACE_CASCADE.detectMultiScale(
+                                gray, scaleFactor=1.1, minNeighbors=4, minSize=(30, 30)
+                            )
+                            if len(faces) > 0:
+                                for (fx, fy, fw, fh) in faces:
+                                    f_area_ratio = (fw * fh) / image_area if image_area > 0 else 0
+                                    f_h_ratio = fh / image_height if image_height > 0 else 0
+                                    f_w_ratio = fw / image_width if image_width > 0 else 0
+                                    if f_area_ratio >= 0.05 or f_h_ratio >= 0.22 or f_w_ratio >= 0.22:
+                                        has_large_face = True
+                                        has_prominent_face = True
+                                        face_indicator = f"large_face (area_ratio={f_area_ratio:.3f}, h_ratio={f_h_ratio:.2f})"
+                                        break
+                                    elif f_area_ratio >= 0.015 or f_h_ratio >= 0.10 or f_w_ratio >= 0.10:
+                                        has_prominent_face = True
+                                        face_indicator = f"prominent_face (area_ratio={f_area_ratio:.3f}, h_ratio={f_h_ratio:.2f})"
+                                        break
+                                if not has_prominent_face:
+                                    face_indicator = f"small_background_face ({len(faces)} faces)"
+                    except Exception as face_err:
+                        face_indicator = f"face_detection_error ({face_err})"
+
+                # -------------------------
+                # VALIDATION RULES
+                # -------------------------
+                if "water" in issue_lower and confidence < 65.0:
+                    suspicious_detection = True
+                    reject_reason = f"low_confidence_water_leakage ({confidence:.1f}% < 65%)"
+                elif confidence < 55.0:
+                    suspicious_detection = True
+                    reject_reason = f"weak_confidence ({confidence:.1f}% < 55%)"
+                elif has_large_face and confidence < 85.0:
+                    suspicious_detection = True
+                    reject_reason = f"large_person_selfie_with_moderate_civic ({face_indicator}, conf={confidence:.1f}%)"
+                elif has_prominent_face and confidence < 75.0:
+                    suspicious_detection = True
+                    reject_reason = f"person_selfie_with_weak_civic ({face_indicator}, conf={confidence:.1f}%)"
+                elif "water" in issue_lower and area_ratio >= 0.70 and height_ratio >= 0.92 and width_ratio <= 0.30:
+                    suspicious_detection = True
+                    reject_reason = "water_leakage_narrow_person_selfie"
+                elif area_ratio >= 0.98 and height_ratio >= 0.98 and width_ratio >= 0.98 and confidence < 70.0:
+                    suspicious_detection = True
+                    reject_reason = "full_frame_artifact_low_conf"
+
+                # Log required validation details
+                print(f"[validation] raw label = {raw_issue}")
+                print(f"[validation] confidence = {confidence}%")
+                print(f"[validation] bbox area ratio = {area_ratio:.3f}")
+                print(f"[validation] face/person indicator = {face_indicator}")
+                print(f"[validation] civic detection accepted/rejected = {'accepted' if not suspicious_detection else 'rejected'}")
+                print(f"[validation] final issue = {issue if not suspicious_detection else 'No Issue Detected'}")
 
                 if suspicious_detection:
                     continue
