@@ -23,7 +23,11 @@ from PIL import Image
 
 try:
     import cv2
-    FACE_CASCADE = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+    cascade_path = os.path.join(os.path.dirname(__file__), "haarcascade_frontalface_default.xml")
+    if not os.path.exists(cascade_path):
+        cascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+    FACE_CASCADE = cv2.CascadeClassifier(cascade_path)
+    print(f"[app] OpenCV face cascade loaded from: {cascade_path} (empty={FACE_CASCADE.empty()})")
 except Exception as face_init_err:
     print("[app] OpenCV face cascade initialization notice:", face_init_err)
     cv2 = None
