@@ -398,32 +398,35 @@ def detect():
         # -------------------------
         filename = os.path.basename(file.filename)
         filepath = os.path.join(UPLOAD_FOLDER, filename)
-        file.save(filepath)
 
-        file_size = os.path.getsize(filepath)
-        print(f"[detect] file received: {filename} ({file_size} bytes)")
-        print("[detect] upload saved")
-
-        if file_size > 10 * 1024 * 1024:
-            os.remove(filepath)
-            return jsonify({"error": "Uploaded image exceeds 10MB limit"}), 400
-
-        # -------------------------
-        # OPTIMIZE IMAGE FOR MEMORY & INFERENCE
-        # Downscale large images (max 320px) to prevent PyTorch OOM & Gunicorn 502 OOM crash
-        # -------------------------
         print("[detect] preprocessing started")
         prep_start = time.time()
         try:
-            with Image.open(filepath) as img:
+            with Image.open(file.stream) as img:
                 img_w, img_h = img.size
                 max_dim = 320
                 if max(img_w, img_h) > max_dim:
                     with img.convert("RGB") as img_rgb:
                         img_rgb.thumbnail((max_dim, max_dim), Image.Resampling.BILINEAR)
                         img_rgb.save(filepath, format="JPEG", quality=75)
+                else:
+                    file.stream.seek(0)
+                    file.save(filepath)
         except Exception as img_err:
-            print("[detect] Image optimization notice:", img_err)
+            print("[detect] Direct image resize notice:", img_err)
+            try:
+                file.stream.seek(0)
+            except Exception:
+                pass
+            file.save(filepath)
+
+        file_size = os.path.getsize(filepath)
+        print(f"[detect] file processed: {filename} ({file_size} bytes)")
+
+        if file_size > 10 * 1024 * 1024:
+            os.remove(filepath)
+            return jsonify({"error": "Uploaded image exceeds 10MB limit"}), 400
+
         prep_time = time.time() - prep_start
         print(f"[detect] preprocessing finished in {prep_time:.2f}s")
 
