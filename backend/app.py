@@ -456,6 +456,11 @@ def detect():
                 device='cpu',
                 verbose=False
             )
+            try:
+                if hasattr(yolo_model, "predictor"):
+                    yolo_model.predictor = None
+            except Exception:
+                pass
         inf_duration = time.time() - inf_start
         print(f"[detect] inference finished in {inf_duration:.2f}s")
         trim_memory()
