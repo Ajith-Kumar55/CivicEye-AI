@@ -24,8 +24,9 @@ from PIL import Image
 def trim_memory():
     gc.collect()
     try:
-        libc = ctypes.CDLL("libc.so.6")
-        libc.malloc_trim(0)
+        libc = ctypes.CDLL(None)
+        if hasattr(libc, "malloc_trim"):
+            libc.malloc_trim(0)
     except Exception:
         pass
 
@@ -416,7 +417,7 @@ def detect():
         try:
             with Image.open(filepath) as img:
                 img_w, img_h = img.size
-                max_dim = 320
+                max_dim = 416
                 if max(img_w, img_h) > max_dim:
                     img = img.convert("RGB")
                     img.thumbnail((max_dim, max_dim), Image.Resampling.BILINEAR)
@@ -429,7 +430,7 @@ def detect():
         trim_memory()
 
         # -------------------------
-        # RUN YOLO INFERENCE (LAZY MODEL GETTER, CPU, IMGSZ=320, CONF=0.25)
+        # RUN YOLO INFERENCE (LAZY MODEL GETTER, CPU, IMGSZ=416, CONF=0.25)
         # -------------------------
         model_start = time.time()
         yolo_model = get_model()
@@ -446,12 +447,12 @@ def detect():
             except Exception:
                 pass
 
-        with torch.inference_mode():
+        with torch.no_grad():
             results = yolo_model.predict(
                 source=filepath,
                 save=False,
                 conf=0.25,
-                imgsz=320,
+                imgsz=416,
                 device='cpu',
                 verbose=False
             )
