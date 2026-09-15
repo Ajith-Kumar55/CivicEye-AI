@@ -36,21 +36,15 @@ function ResolutionFeed({ userRole }) {
     };
   }, []);
 
-  // Admin New Post Form state
-  const [adminName, setAdminName] = useState("Shimoga Municipal Corporation");
-  const [title, setTitle] = useState("🕳️ Pothole Resolved");
-  const [issueType, setIssueType] = useState("Pothole");
-  const [location, setLocation] = useState("Shimoga Ward 14");
-  const [problemDesc, setProblemDesc] = useState("Large pothole reported by citizens.");
-  const [resolutionDesc, setResolutionDesc] = useState("Road repair completed by municipality.");
-  const [postImage, setPostImage] = useState(null);
-  const [imagePreview, setImagePreview] = useState("");
-  const [submitting, setSubmitting] = useState(false);
   const [archivePostConfirmItem, setArchivePostConfirmItem] = useState(null);
 
   const handleArchivePost = async (postId) => {
     try {
-      const adminToken = sessionStorage.getItem("civiceye_admin_token") || "civiceye-admin-secret-token-2026";
+      const adminToken = sessionStorage.getItem("civiceye_admin_token");
+      if (!adminToken) {
+        alert("Admin authorization token is missing. Please log in as Municipality Admin.");
+        return;
+      }
       const res = await fetch(`${API_BASE_URL}/api/admin/feed/posts/${postId}`, {
         method: "DELETE",
         headers: { "Authorization": `Bearer ${adminToken}` }
@@ -113,55 +107,6 @@ function ResolutionFeed({ userRole }) {
       }
     } catch (err) {
       console.error("Error toggling like:", err);
-    }
-  };
-
-  const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setPostImage(file);
-      setImagePreview(URL.createObjectURL(file));
-    }
-  };
-
-  const handleCreatePost = async (e) => {
-    e.preventDefault();
-    setSubmitting(true);
-
-    try {
-      const adminToken = sessionStorage.getItem("civiceye_admin_token") || "civiceye-admin-secret-token-2026";
-      const formData = new FormData();
-      formData.append("admin_name", adminName);
-      formData.append("title", title);
-      formData.append("issue_type", issueType);
-      formData.append("location", location);
-      formData.append("problem_description", problemDesc);
-      formData.append("resolution_description", resolutionDesc);
-      if (postImage) {
-        formData.append("resolution_image", postImage);
-      }
-
-      const res = await fetch(`${API_BASE_URL}/api/admin/feed/post`, {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${adminToken}`
-        },
-        body: formData
-      });
-
-      if (res.ok) {
-        setShowCreateModal(false);
-        setPostImage(null);
-        setImagePreview("");
-        fetchFeedPosts();
-      } else {
-        alert("Failed to publish resolution feed post.");
-      }
-    } catch (err) {
-      console.error("Error creating post:", err);
-      alert("Network error publishing post.");
-    } finally {
-      setSubmitting(false);
     }
   };
 
@@ -559,200 +504,383 @@ function ResolutionFeed({ userRole }) {
 
       {/* ADMIN CREATE POST MODAL */}
       {showCreateModal && (
-        <div
+        <CreatePostModal
+          onClose={() => setShowCreateModal(false)}
+          onPostCreated={() => fetchFeedPosts()}
+        />
+      )}
+    </div>
+  );
+}
+
+// EXPORTABLE REUSABLE CREATE POST MODAL WITH PRE-FILL SUPPORT
+export function CreatePostModal({ initialComplaint, onClose, onPostCreated }) {
+  const compId = initialComplaint ? initialComplaint.id : 0;
+
+  const defaultTitle = initialComplaint
+    ? (initialComplaint.resolution_title || `📢 ${initialComplaint.issue || 'Issue'} Resolved`)
+    : "🕳️ Pothole Resolved";
+
+  const defaultIssueType = initialComplaint ? (initialComplaint.issue || "Pothole") : "Pothole";
+  const defaultLocation = initialComplaint ? (initialComplaint.location || "") : "Shimoga Ward 14";
+  const defaultProblem = initialComplaint ? (initialComplaint.description || "Reported public issue.") : "Large pothole reported by citizens.";
+  const defaultAdmin = initialComplaint ? (initialComplaint.department || "Shimoga Municipal Corporation") : "Shimoga Municipal Corporation";
+  const defaultResDesc = initialComplaint ? (initialComplaint.resolution_description || "Road repair completed by municipality.") : "Road repair completed by municipality.";
+
+  const [adminName, setAdminName] = useState(defaultAdmin);
+  const [title, setTitle] = useState(defaultTitle);
+  const [issueType, setIssueType] = useState(defaultIssueType);
+  const [location, setLocation] = useState(defaultLocation);
+  const [problemDesc, setProblemDesc] = useState(defaultProblem);
+  const [resolutionDesc, setResolutionDesc] = useState(defaultResDesc);
+  const [postImage, setPostImage] = useState(null);
+  const [imagePreview, setImagePreview] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
+
+  useEffect(() => {
+    if (initialComplaint) {
+      setAdminName(initialComplaint.department || "Shimoga Municipal Corporation");
+      setTitle(initialComplaint.resolution_title || `📢 ${initialComplaint.issue || 'Issue'} Resolved`);
+      setIssueType(initialComplaint.issue || "Pothole");
+      setLocation(initialComplaint.location || "");
+      setProblemDesc(initialComplaint.description || "Reported public issue.");
+      setResolutionDesc(initialComplaint.resolution_description || "Road repair completed by municipality.");
+    }
+  }, [initialComplaint]);
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setPostImage(file);
+      setImagePreview(URL.createObjectURL(file));
+    }
+  };
+
+  const handleCreatePost = async (e) => {
+    e.preventDefault();
+    setSubmitting(true);
+    setErrorMessage("");
+    setSuccessMessage("");
+
+    try {
+      const adminToken = sessionStorage.getItem("civiceye_admin_token");
+      if (!adminToken) {
+        setErrorMessage("Admin authorization token is missing. Please log in as Municipality Admin.");
+        setSubmitting(false);
+        return;
+      }
+      const formData = new FormData();
+      if (compId > 0) {
+        formData.append("complaint_id", compId);
+      }
+      formData.append("admin_name", adminName);
+      formData.append("title", title);
+      formData.append("issue_type", issueType);
+      formData.append("location", location);
+      formData.append("problem_description", problemDesc);
+      formData.append("resolution_description", resolutionDesc);
+      if (postImage) {
+        formData.append("resolution_image", postImage);
+      }
+
+      const res = await fetch(`${API_BASE_URL}/api/admin/feed/post`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${adminToken}`
+        },
+        body: formData
+      });
+
+      const data = await res.json();
+
+      if (res.ok && data.success !== false) {
+        setSuccessMessage("📢 Resolution Post Published Successfully!");
+        setTimeout(() => {
+          if (onPostCreated) onPostCreated(data);
+          onClose();
+        }, 1200);
+      } else {
+        setErrorMessage(data.error || "Failed to publish resolution feed post.");
+      }
+    } catch (err) {
+      console.error("Error creating post:", err);
+      setErrorMessage("Network error publishing resolution post.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Construct original complaint image URL if available
+  let origImageSrc = null;
+  if (initialComplaint && initialComplaint.prediction_image) {
+    if (initialComplaint.prediction_image.startsWith("http")) {
+      origImageSrc = initialComplaint.prediction_image;
+    } else if (initialComplaint.prediction_image.startsWith("result/")) {
+      origImageSrc = `${API_BASE_URL}/prediction/${initialComplaint.prediction_image.replace("result/", "")}`;
+    } else {
+      origImageSrc = `${API_BASE_URL}/prediction/${initialComplaint.prediction_image}`;
+    }
+  }
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        width: "100vw",
+        height: "100vh",
+        background: "rgba(15, 23, 42, 0.85)",
+        backdropFilter: "blur(5px)",
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        zIndex: 2500,
+        padding: "20px"
+      }}
+    >
+      <div
+        style={{
+          background: "#1e293b",
+          width: "100%",
+          maxWidth: "680px",
+          maxHeight: "90vh",
+          overflowY: "auto",
+          borderRadius: "20px",
+          border: "2px solid #10b981",
+          boxShadow: "0 25px 50px rgba(0,0,0,0.5)",
+          padding: "25px",
+          color: "#fff",
+          position: "relative"
+        }}
+      >
+        <button
+          onClick={onClose}
           style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            width: "100vw",
-            height: "100vh",
-            background: "rgba(15, 23, 42, 0.85)",
-            backdropFilter: "blur(5px)",
+            position: "absolute",
+            top: "18px",
+            right: "18px",
+            background: "#ef4444",
+            color: "#fff",
+            border: "none",
+            width: "32px",
+            height: "32px",
+            borderRadius: "50%",
+            cursor: "pointer",
             display: "flex",
             justifyContent: "center",
-            alignItems: "center",
-            zIndex: 2000,
-            padding: "20px"
+            alignItems: "center"
           }}
         >
+          <FaTimes />
+        </button>
+
+        <h3 style={{ margin: "0 0 15px", color: "#34d399", fontSize: "20px" }}>
+          📢 {initialComplaint ? `Publish Resolution Post for Complaint #CEV-${1000 + initialComplaint.id}` : "Publish Municipality Resolution Update"}
+        </h3>
+
+        {/* PRE-FILLED COMPLAINT INFORMATION SUMMARY */}
+        {initialComplaint && (
           <div
             style={{
-              background: "#1e293b",
-              width: "100%",
-              maxWidth: "600px",
-              borderRadius: "20px",
-              border: "2px solid #10b981",
-              boxShadow: "0 25px 50px rgba(0,0,0,0.5)",
-              padding: "25px",
-              color: "#fff",
-              position: "relative"
+              background: "#0f172a",
+              border: "1px solid #334155",
+              borderRadius: "14px",
+              padding: "16px",
+              marginBottom: "18px",
+              fontSize: "13px"
             }}
           >
+            <div style={{ color: "#38bdf8", fontWeight: "bold", marginBottom: "8px", fontSize: "14px" }}>
+              📋 Resolved Complaint Summary (Pre-filled):
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "8px" }}>
+              <div><b>Complaint ID:</b> #CEV-{1000 + initialComplaint.id}</div>
+              <div><b>Issue Type:</b> <span style={{ color: "#f59e0b" }}>{initialComplaint.issue}</span></div>
+              <div><b>Department:</b> {initialComplaint.department || "PWD & Roads"}</div>
+              <div><b>Reporter:</b> {initialComplaint.citizen_name || "Registered Citizen"}</div>
+            </div>
+            {(initialComplaint.latitude || initialComplaint.longitude) && (
+              <div style={{ marginBottom: "6px", color: "#a7f3d0" }}>
+                <b>GPS Coordinates:</b> Lat {initialComplaint.latitude}, Lng {initialComplaint.longitude}
+              </div>
+            )}
+            <div style={{ marginBottom: "6px" }}>
+              <b>Location Address:</b> {initialComplaint.location}
+            </div>
+            <div style={{ marginBottom: "6px" }}>
+              <b>Original Problem:</b> {initialComplaint.description || "Reported public issue."}
+            </div>
+            {origImageSrc && (
+              <div style={{ marginTop: "10px" }}>
+                <span style={{ fontSize: "12px", color: "#94a3b8" }}>Original Photo Evidence:</span>
+                <img
+                  src={origImageSrc}
+                  alt="Original Evidence"
+                  onError={(e) => { e.target.onerror = null; e.target.style.display = "none"; }}
+                  style={{ maxHeight: "80px", borderRadius: "8px", marginTop: "4px", display: "block", border: "1px solid #334155" }}
+                />
+              </div>
+            )}
+          </div>
+        )}
+
+        {errorMessage && (
+          <div style={{ background: "#7f1d1d", color: "#fecaca", padding: "12px", borderRadius: "10px", marginBottom: "15px", fontSize: "13px", border: "1px solid #ef4444" }}>
+            ❌ {errorMessage}
+          </div>
+        )}
+
+        {successMessage && (
+          <div style={{ background: "#065f46", color: "#a7f3d0", padding: "12px", borderRadius: "10px", marginBottom: "15px", fontSize: "14px", border: "1px solid #10b981", fontWeight: "bold" }}>
+            {successMessage}
+          </div>
+        )}
+
+        <form onSubmit={handleCreatePost}>
+          <div style={{ marginBottom: "12px" }}>
+            <label style={{ display: "block", marginBottom: "4px", fontSize: "12px", color: "#94a3b8" }}>
+              Municipality / Authority Name:
+            </label>
+            <input
+              type="text"
+              value={adminName}
+              onChange={(e) => setAdminName(e.target.value)}
+              style={inputStyle}
+              required
+            />
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
+            <div>
+              <label style={{ display: "block", marginBottom: "4px", fontSize: "12px", color: "#94a3b8" }}>
+                Resolution Title / Action Headline:
+              </label>
+              <input
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                style={inputStyle}
+                required
+              />
+            </div>
+            <div>
+              <label style={{ display: "block", marginBottom: "4px", fontSize: "12px", color: "#94a3b8" }}>
+                Issue Type:
+              </label>
+              <select
+                value={issueType}
+                onChange={(e) => setIssueType(e.target.value)}
+                style={inputStyle}
+              >
+                <option value="Pothole">Pothole</option>
+                <option value="Garbage">Garbage</option>
+                <option value="Water Leakage">Water Leakage</option>
+                <option value="No Issue Detected">No Issue Detected</option>
+              </select>
+            </div>
+          </div>
+
+          <div style={{ marginBottom: "12px" }}>
+            <label style={{ display: "block", marginBottom: "4px", fontSize: "12px", color: "#94a3b8" }}>
+              Location:
+            </label>
+            <input
+              type="text"
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+              placeholder="e.g. Shimoga"
+              style={inputStyle}
+              required
+            />
+          </div>
+
+          <div style={{ marginBottom: "12px" }}>
+            <label style={{ display: "block", marginBottom: "4px", fontSize: "12px", color: "#94a3b8" }}>
+              Original Problem Description:
+            </label>
+            <textarea
+              rows="2"
+              value={problemDesc}
+              onChange={(e) => setProblemDesc(e.target.value)}
+              placeholder="Problem: Large pothole reported by citizens."
+              style={inputStyle}
+              required
+            />
+          </div>
+
+          <div style={{ marginBottom: "12px" }}>
+            <label style={{ display: "block", marginBottom: "4px", fontSize: "12px", color: "#a7f3d0", fontWeight: "bold" }}>
+              Action Taken / Resolution Description (Admin Input):
+            </label>
+            <textarea
+              rows="3"
+              value={resolutionDesc}
+              onChange={(e) => setResolutionDesc(e.target.value)}
+              placeholder="Action Taken: Road repair completed by municipality."
+              style={{ ...inputStyle, border: "1px solid #10b981" }}
+              required
+            />
+          </div>
+
+          <div style={{ marginBottom: "18px" }}>
+            <label style={{ display: "block", marginBottom: "4px", fontSize: "12px", color: "#a7f3d0" }}>
+              Upload Resolution Evidence Image:
+            </label>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleFileChange}
+              style={inputStyle}
+            />
+            {imagePreview && (
+              <img
+                src={imagePreview}
+                alt="Preview"
+                style={{ maxHeight: "120px", marginTop: "8px", borderRadius: "8px", border: "1px solid #10b981" }}
+              />
+            )}
+          </div>
+
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
             <button
-              onClick={() => setShowCreateModal(false)}
+              type="button"
+              onClick={onClose}
               style={{
-                position: "absolute",
-                top: "18px",
-                right: "18px",
-                background: "#ef4444",
+                background: "#334155",
                 color: "#fff",
                 border: "none",
-                width: "32px",
-                height: "32px",
-                borderRadius: "50%",
-                cursor: "pointer",
-                display: "flex",
-                justifyContent: "center",
-                alignItems: "center"
+                padding: "10px 18px",
+                borderRadius: "8px",
+                fontWeight: "bold",
+                cursor: "pointer"
               }}
             >
-              <FaTimes />
+              Cancel
             </button>
-
-            <h3 style={{ margin: "0 0 15px", color: "#34d399" }}>
-              📢 Publish Municipality Resolution Update
-            </h3>
-
-            <form onSubmit={handleCreatePost}>
-              <div style={{ marginBottom: "12px" }}>
-                <label style={{ display: "block", marginBottom: "4px", fontSize: "12px", color: "#94a3b8" }}>
-                  Municipality / Authority Name:
-                </label>
-                <input
-                  type="text"
-                  value={adminName}
-                  onChange={(e) => setAdminName(e.target.value)}
-                  style={inputStyle}
-                  required
-                />
-              </div>
-
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
-                <div>
-                  <label style={{ display: "block", marginBottom: "4px", fontSize: "12px", color: "#94a3b8" }}>
-                    Resolution Title:
-                  </label>
-                  <input
-                    type="text"
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    style={inputStyle}
-                    required
-                  />
-                </div>
-                <div>
-                  <label style={{ display: "block", marginBottom: "4px", fontSize: "12px", color: "#94a3b8" }}>
-                    Issue Type:
-                  </label>
-                  <select
-                    value={issueType}
-                    onChange={(e) => setIssueType(e.target.value)}
-                    style={inputStyle}
-                  >
-                    <option value="Pothole">Pothole</option>
-                    <option value="Garbage">Garbage</option>
-                    <option value="Water Leakage">Water Leakage</option>
-                  </select>
-                </div>
-              </div>
-
-              <div style={{ marginBottom: "12px" }}>
-                <label style={{ display: "block", marginBottom: "4px", fontSize: "12px", color: "#94a3b8" }}>
-                  Location:
-                </label>
-                <input
-                  type="text"
-                  value={location}
-                  onChange={(e) => setLocation(e.target.value)}
-                  placeholder="e.g. Shimoga"
-                  style={inputStyle}
-                  required
-                />
-              </div>
-
-              <div style={{ marginBottom: "12px" }}>
-                <label style={{ display: "block", marginBottom: "4px", fontSize: "12px", color: "#94a3b8" }}>
-                  Problem Description:
-                </label>
-                <textarea
-                  rows="2"
-                  value={problemDesc}
-                  onChange={(e) => setProblemDesc(e.target.value)}
-                  placeholder="Problem: Large pothole reported by citizens."
-                  style={inputStyle}
-                  required
-                />
-              </div>
-
-              <div style={{ marginBottom: "12px" }}>
-                <label style={{ display: "block", marginBottom: "4px", fontSize: "12px", color: "#94a3b8" }}>
-                  Action Taken / Resolution Description:
-                </label>
-                <textarea
-                  rows="2"
-                  value={resolutionDesc}
-                  onChange={(e) => setResolutionDesc(e.target.value)}
-                  placeholder="Action Taken: Road repair completed by municipality."
-                  style={inputStyle}
-                  required
-                />
-              </div>
-
-              <div style={{ marginBottom: "18px" }}>
-                <label style={{ display: "block", marginBottom: "4px", fontSize: "12px", color: "#94a3b8" }}>
-                  Resolution Image:
-                </label>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleFileChange}
-                  style={inputStyle}
-                />
-                {imagePreview && (
-                  <img
-                    src={imagePreview}
-                    alt="Preview"
-                    style={{ maxHeight: "100px", marginTop: "8px", borderRadius: "8px" }}
-                  />
-                )}
-              </div>
-
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
-                <button
-                  type="button"
-                  onClick={() => setShowCreateModal(false)}
-                  style={{
-                    background: "#334155",
-                    color: "#fff",
-                    border: "none",
-                    padding: "10px 18px",
-                    borderRadius: "8px",
-                    fontWeight: "bold",
-                    cursor: "pointer"
-                  }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  style={{
-                    background: "#10b981",
-                    color: "#fff",
-                    border: "none",
-                    padding: "10px 20px",
-                    borderRadius: "8px",
-                    fontWeight: "bold",
-                    cursor: "pointer"
-                  }}
-                >
-                  {submitting ? "Publishing..." : "Publish Post"}
-                </button>
-              </div>
-            </form>
+            <button
+              type="submit"
+              disabled={submitting}
+              style={{
+                background: "#10b981",
+                color: "#fff",
+                border: "none",
+                padding: "10px 22px",
+                borderRadius: "8px",
+                fontWeight: "bold",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px"
+              }}
+            >
+              📢 {submitting ? "Publishing..." : "Publish Resolution"}
+            </button>
           </div>
-        </div>
-      )}
+        </form>
+      </div>
     </div>
   );
 }

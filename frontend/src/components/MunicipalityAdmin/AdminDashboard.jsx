@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import AdminSidebar from "./AdminSidebar";
 import AdminNavbar from "./AdminNavbar";
-import ResolutionFeed from "../ResolutionFeed";
+import ResolutionFeed, { CreatePostModal } from "../ResolutionFeed";
 import StatusTimeline from "../StatusTimeline";
 import {
   FaTasks,
@@ -54,6 +54,7 @@ function AdminDashboard({ onLogout }) {
 
   const [complaintsList, setComplaintsList] = useState([]);
   const [selectedComplaint, setSelectedComplaint] = useState(null);
+  const [publishingComplaint, setPublishingComplaint] = useState(null);
 
   // Filters
   const [filterIssue, setFilterIssue] = useState("ALL");
@@ -99,7 +100,11 @@ function AdminDashboard({ onLogout }) {
 
   const handleArchiveComplaint = async (complaintId) => {
     try {
-      const adminToken = sessionStorage.getItem("civiceye_admin_token") || "civiceye-admin-secret-token-2026";
+      const adminToken = sessionStorage.getItem("civiceye_admin_token");
+      if (!adminToken) {
+        alert("Admin authorization token is missing. Please log in as Municipality Admin.");
+        return;
+      }
       const res = await fetch(`${API_BASE_URL}/api/admin/complaints/${complaintId}`, {
         method: "DELETE",
         headers: { "Authorization": `Bearer ${adminToken}` }
@@ -119,7 +124,11 @@ function AdminDashboard({ onLogout }) {
 
   const handleRestoreComplaint = async (complaintId) => {
     try {
-      const adminToken = sessionStorage.getItem("civiceye_admin_token") || "civiceye-admin-secret-token-2026";
+      const adminToken = sessionStorage.getItem("civiceye_admin_token");
+      if (!adminToken) {
+        alert("Admin authorization token is missing. Please log in as Municipality Admin.");
+        return;
+      }
       const res = await fetch(`${API_BASE_URL}/api/admin/complaints/${complaintId}/restore`, {
         method: "POST",
         headers: { "Authorization": `Bearer ${adminToken}` }
@@ -138,7 +147,11 @@ function AdminDashboard({ onLogout }) {
   // Update complaint status, department, or notes in backend database
   const handleUpdateComplaint = async (complaintId, updatedFields) => {
     try {
-      const adminToken = sessionStorage.getItem("civiceye_admin_token") || "civiceye-admin-secret-token-2026";
+      const adminToken = sessionStorage.getItem("civiceye_admin_token");
+      if (!adminToken) {
+        alert("Admin authorization token is missing. Please log in as Municipality Admin.");
+        return;
+      }
       const res = await fetch(`${API_BASE_URL}/api/admin/complaints/${complaintId}`, {
         method: "PUT",
         headers: {
@@ -692,6 +705,45 @@ function AdminDashboard({ onLogout }) {
                           </button>
 
                           {item.status === "Resolved" && !viewArchivedFilter && (
+                            item.has_resolution_post ? (
+                              <span
+                                style={{
+                                  background: "#065f46",
+                                  color: "#a7f3d0",
+                                  padding: "6px 12px",
+                                  borderRadius: "8px",
+                                  fontWeight: "bold",
+                                  fontSize: "12px",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "4px"
+                                }}
+                              >
+                                ✅ Published
+                              </span>
+                            ) : (
+                              <button
+                                onClick={() => setPublishingComplaint(item)}
+                                style={{
+                                  background: "#10b981",
+                                  color: "#fff",
+                                  border: "none",
+                                  padding: "6px 12px",
+                                  borderRadius: "8px",
+                                  cursor: "pointer",
+                                  fontWeight: "bold",
+                                  fontSize: "12px",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "5px"
+                                }}
+                              >
+                                📢 Publish Resolution
+                              </button>
+                            )
+                          )}
+
+                          {item.status === "Resolved" && !viewArchivedFilter && (
                             <button
                               onClick={() => setArchiveConfirmItem(item)}
                               style={{
@@ -823,6 +875,22 @@ function AdminDashboard({ onLogout }) {
           complaint={selectedComplaint}
           onClose={() => setSelectedComplaint(null)}
           onUpdate={handleUpdateComplaint}
+          onPublishResolution={(comp) => {
+            setSelectedComplaint(null);
+            setPublishingComplaint(comp);
+          }}
+        />
+      )}
+
+      {/* 5. PUBLISH RESOLUTION POST MODAL */}
+      {publishingComplaint && (
+        <CreatePostModal
+          initialComplaint={publishingComplaint}
+          onClose={() => setPublishingComplaint(null)}
+          onPostCreated={() => {
+            fetchDataFromBackend(viewArchivedFilter);
+            setPublishingComplaint(null);
+          }}
         />
       )}
     </div>
@@ -830,59 +898,19 @@ function AdminDashboard({ onLogout }) {
 }
 
 // DETAILED COMPLAINT INSPECTION MODAL COMPONENT
-function ComplaintDetailModal({ complaint, onClose, onUpdate }) {
+function ComplaintDetailModal({ complaint, onClose, onUpdate, onPublishResolution }) {
   const [status, setStatus] = useState(complaint.status || "Pending");
   const [department, setDepartment] = useState(complaint.department || "PWD & Roads");
   const [officerNotes, setOfficerNotes] = useState(complaint.officer_notes || "");
-  
-  // Resolution specific state
-  const [resTitle, setResTitle] = useState(complaint.resolution_title || `${complaint.issue || "Issue"} Resolved`);
-  const [resDesc, setResDesc] = useState(complaint.resolution_description || officerNotes || "Municipality road maintenance team repaired and verified the issue.");
-  const [resFile, setResFile] = useState(null);
-  const [resFilePreview, setResFilePreview] = useState(complaint.resolution_image || "");
   const [saving, setSaving] = useState(false);
-
-  const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setResFile(file);
-      setResFilePreview(URL.createObjectURL(file));
-    }
-  };
 
   const handleSave = async () => {
     setSaving(true);
-    const adminToken = sessionStorage.getItem("civiceye_admin_token") || "civiceye-admin-secret-token-2026";
-
-    // 1. Regular status / department / notes update
     await onUpdate(complaint.id, {
       status,
       department,
       officer_notes: officerNotes
     });
-
-    // 2. Upload resolution proof if status is set to Resolved
-    if (status === "Resolved") {
-      try {
-        const formData = new FormData();
-        formData.append("resolution_title", resTitle);
-        formData.append("resolution_description", resDesc);
-        if (resFile) {
-          formData.append("resolution_image", resFile);
-        }
-
-        await fetch(`${API_BASE_URL}/api/admin/complaints/${complaint.id}/resolve`, {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${adminToken}`
-          },
-          body: formData
-        });
-      } catch (err) {
-        console.error("Resolution submit error:", err);
-      }
-    }
-
     setSaving(false);
     onClose();
   };
@@ -1131,7 +1159,7 @@ function ComplaintDetailModal({ complaint, onClose, onUpdate }) {
             </div>
           </div>
 
-          {/* DEDICATED RESOLUTION PROOF FORM (WHEN STATUS IS RESOLVED) */}
+          {/* DEDICATED RESOLUTION PUBLICATION ACTION (WHEN STATUS IS RESOLVED) */}
           {status === "Resolved" && (
             <div
               style={{
@@ -1139,91 +1167,68 @@ function ComplaintDetailModal({ complaint, onClose, onUpdate }) {
                 padding: "20px",
                 borderRadius: "14px",
                 border: "2px solid #10b981",
-                marginBottom: "20px"
+                marginBottom: "20px",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                flexWrap: "wrap",
+                gap: "15px"
               }}
             >
-              <h4 style={{ margin: "0 0 14px", color: "#34d399" }}>
-                🏆 Resolution Proof Form (Visible to Citizen)
-              </h4>
-
-              <div style={{ marginBottom: "12px" }}>
-                <label style={{ display: "block", marginBottom: "4px", fontSize: "12px", color: "#a7f3d0" }}>
-                  Resolution Title:
-                </label>
-                <input
-                  type="text"
-                  value={resTitle}
-                  onChange={(e) => setResTitle(e.target.value)}
-                  placeholder="e.g. Road Pothole Resolved"
-                  style={{
-                    width: "100%",
-                    background: "#0f172a",
-                    color: "#fff",
-                    border: "1px solid #10b981",
-                    borderRadius: "8px",
-                    padding: "10px",
-                    fontSize: "13px",
-                    outline: "none"
-                  }}
-                />
-              </div>
-
-              <div style={{ marginBottom: "12px" }}>
-                <label style={{ display: "block", marginBottom: "4px", fontSize: "12px", color: "#a7f3d0" }}>
-                  Action Taken / Resolution Description:
-                </label>
-                <textarea
-                  rows="3"
-                  value={resDesc}
-                  onChange={(e) => setResDesc(e.target.value)}
-                  placeholder="e.g. Municipality road maintenance team repaired the pothole."
-                  style={{
-                    width: "100%",
-                    background: "#0f172a",
-                    color: "#fff",
-                    border: "1px solid #10b981",
-                    borderRadius: "8px",
-                    padding: "10px",
-                    fontSize: "13px",
-                    outline: "none",
-                    resize: "vertical"
-                  }}
-                />
-              </div>
-
               <div>
-                <label style={{ display: "block", marginBottom: "4px", fontSize: "12px", color: "#a7f3d0" }}>
-                  Upload Resolution After-Fix Image:
-                </label>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleFileChange}
-                  style={{
-                    background: "#0f172a",
-                    color: "#fff",
-                    padding: "8px",
-                    borderRadius: "8px",
-                    border: "1px solid #10b981",
-                    width: "100%",
-                    fontSize: "12px",
-                    cursor: "pointer"
-                  }}
-                />
-                {resFilePreview && (
-                  <div style={{ marginTop: "10px" }}>
-                    <img
-                      src={resFilePreview}
-                      alt="Resolution Preview"
-                      style={{
-                        maxHeight: "120px",
-                        borderRadius: "8px",
-                        border: "1px solid #10b981"
-                      }}
-                    />
-                  </div>
-                )}
+                <h4 style={{ margin: "0 0 6px", color: "#34d399", fontSize: "16px" }}>
+                  📢 Public Resolution Feed Post
+                </h4>
+                <p style={{ margin: 0, color: "#a7f3d0", fontSize: "13px" }}>
+                  {complaint.has_resolution_post
+                    ? "This complaint has been published to the public Resolution Feed."
+                    : "Complaint is marked Resolved. Click to pre-fill complaint details into the public Resolution Feed post form."}
+                </p>
               </div>
+
+              {complaint.has_resolution_post ? (
+                <div
+                  style={{
+                    background: "#065f46",
+                    color: "#a7f3d0",
+                    padding: "10px 18px",
+                    borderRadius: "10px",
+                    fontWeight: "bold",
+                    fontSize: "13px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px"
+                  }}
+                >
+                  ✅ Resolution Published
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    if (onPublishResolution) {
+                      onPublishResolution({ ...complaint, status, department, officer_notes: officerNotes });
+                    }
+                  }}
+                  style={{
+                    background: "#10b981",
+                    color: "#fff",
+                    border: "none",
+                    padding: "12px 20px",
+                    borderRadius: "10px",
+                    fontWeight: "bold",
+                    fontSize: "14px",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    boxShadow: "0 4px 15px rgba(16, 185, 129, 0.4)"
+                  }}
+                >
+                  📢 Publish Resolution
+                </button>
+              )}
             </div>
           )}
 

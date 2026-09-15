@@ -992,6 +992,9 @@ def get_admin_complaints():
         else:
             cursor.execute("SELECT * FROM complaints WHERE is_deleted = 0 ORDER BY id DESC")
         rows = cursor.fetchall()
+
+        cursor.execute("SELECT DISTINCT complaint_id FROM feed_posts WHERE is_deleted = 0 AND complaint_id > 0")
+        published_ids = {row[0] for row in cursor.fetchall()}
         conn.close()
 
         complaints_list = []
@@ -1008,6 +1011,9 @@ def get_admin_complaints():
                 "location": r["location"],
                 "description": r["description"],
                 "department": r["department"],
+                "has_resolution_post": r["id"] in published_ids,
+                "latitude": r["latitude"] if "latitude" in keys and r["latitude"] is not None else "",
+                "longitude": r["longitude"] if "longitude" in keys and r["longitude"] is not None else "",
                 "citizen_name": r["citizen_name"] if "citizen_name" in keys and r["citizen_name"] else "Registered Citizen",
                 "citizen_email": r["citizen_email"] if "citizen_email" in keys and r["citizen_email"] else "citizen@civiceye.com",
                 "citizen_phone": r["citizen_phone"] if "citizen_phone" in keys and r["citizen_phone"] else "+91 9876543210",
@@ -1032,10 +1038,14 @@ def get_single_admin_complaint(complaint_id):
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM complaints WHERE id = ?", (complaint_id,))
         r = cursor.fetchone()
-        conn.close()
 
         if not r:
+            conn.close()
             return jsonify({"error": "Complaint not found"}), 404
+
+        cursor.execute("SELECT COUNT(*) FROM feed_posts WHERE complaint_id = ? AND is_deleted = 0", (complaint_id,))
+        has_post = cursor.fetchone()[0] > 0
+        conn.close()
 
         keys = r.keys()
         return jsonify({
@@ -1049,6 +1059,9 @@ def get_single_admin_complaint(complaint_id):
             "location": r["location"],
             "description": r["description"],
             "department": r["department"],
+            "has_resolution_post": has_post,
+            "latitude": r["latitude"] if "latitude" in keys and r["latitude"] is not None else "",
+            "longitude": r["longitude"] if "longitude" in keys and r["longitude"] is not None else "",
             "citizen_name": r["citizen_name"] if "citizen_name" in keys and r["citizen_name"] else "Registered Citizen",
             "citizen_email": r["citizen_email"] if "citizen_email" in keys and r["citizen_email"] else "citizen@civiceye.com",
             "citizen_phone": r["citizen_phone"] if "citizen_phone" in keys and r["citizen_phone"] else "+91 9876543210",
@@ -1103,24 +1116,12 @@ def resolve_admin_complaint(complaint_id):
             WHERE id = ?
         """, (title, description, resolution_image_url, resolution_image_url, resolution_date, resolution_date, complaint_id))
 
-        # Also auto-publish to feed_posts table
-        cursor.execute("SELECT issue, location, description FROM complaints WHERE id = ?", (complaint_id,))
-        comp = cursor.fetchone()
-        issue_val = comp[0] if comp else "General Issue"
-        loc_val = comp[1] if comp else "City Ward Area"
-        prob_val = comp[2] if comp else "Reported public issue."
-
-        cursor.execute("""
-            INSERT INTO feed_posts (complaint_id, admin_name, title, issue_type, location, problem_description, resolution_description, resolution_image, resolution_date, likes, created_at)
-            VALUES (?, 'Shimoga Municipal Corporation', ?, ?, ?, ?, ?, ?, ?, 0, ?)
-        """, (complaint_id, title, issue_val, loc_val, prob_val, description, resolution_image_url, resolution_date, resolution_date))
-
         conn.commit()
         conn.close()
 
         return jsonify({
             "success": True,
-            "message": f"Complaint #{complaint_id} marked RESOLVED with resolution proof and published to Resolution Feed",
+            "message": f"Complaint #{complaint_id} marked RESOLVED in database",
             "resolution": {
                 "resolution_title": title,
                 "resolution_description": description,
@@ -1240,6 +1241,12 @@ def create_admin_feed_post():
                 "error": "Access Denied: Only Municipality Admin can create posts"
             }), 403
 
+        raw_cid = request.form.get("complaint_id") or (request.json.get("complaint_id", 0) if request.is_json else 0)
+        try:
+            complaint_id = int(raw_cid)
+        except (ValueError, TypeError):
+            complaint_id = 0
+
         admin_name = request.form.get("admin_name") or (request.json.get("admin_name", "Shimoga Municipal Corporation") if request.is_json else "Shimoga Municipal Corporation")
         title = request.form.get("title") or (request.json.get("title", "🕳️ Pothole Resolved") if request.is_json else "🕳️ Pothole Resolved")
         issue_type = request.form.get("issue_type") or (request.json.get("issue_type", "Pothole") if request.is_json else "Pothole")
@@ -1247,25 +1254,51 @@ def create_admin_feed_post():
         problem = request.form.get("problem_description") or (request.json.get("problem_description", "Large pothole reported by citizens.") if request.is_json else "Large pothole reported by citizens.")
         resolution = request.form.get("resolution_description") or (request.json.get("resolution_description", "Road repair completed by municipality.") if request.is_json else "Road repair completed by municipality.")
 
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        # Duplicate Prevention: If complaint_id > 0, ensure it hasn't already been published
+        if complaint_id > 0:
+            cursor.execute("SELECT id FROM feed_posts WHERE complaint_id = ? AND is_deleted = 0", (complaint_id,))
+            existing_post = cursor.fetchone()
+            if existing_post:
+                conn.close()
+                return jsonify({
+                    "success": False,
+                    "error": f"A Resolution Feed post has already been published for Complaint #{complaint_id}."
+                }), 400
+
         resolution_image_url = ""
         if "resolution_image" in request.files:
             file = request.files["resolution_image"]
             if file and file.filename != "":
-                filename = f"feed_{int(datetime.now().timestamp())}_{file.filename}"
+                filename = f"feed_{complaint_id}_{int(datetime.now().timestamp())}_{file.filename}"
                 filepath = os.path.join(UPLOAD_FOLDER, filename)
                 file.save(filepath)
                 resolution_image_url = f"{request.host_url.rstrip('/')}/uploads/{filename}"
 
         date_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
         cursor.execute("""
             INSERT INTO feed_posts (complaint_id, admin_name, title, issue_type, location, problem_description, resolution_description, resolution_image, resolution_date, likes, created_at)
-            VALUES (0, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
-        """, (admin_name, title, issue_type, location, problem, resolution, resolution_image_url, date_str, date_str))
-        conn.commit()
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
+        """, (complaint_id, admin_name, title, issue_type, location, problem, resolution, resolution_image_url, date_str, date_str))
         post_id = cursor.lastrowid
+
+        # Also update resolution details on complaint record if complaint_id > 0
+        if complaint_id > 0:
+            cursor.execute("""
+                UPDATE complaints
+                SET status = 'Resolved',
+                    resolution_title = ?,
+                    resolution_description = ?,
+                    resolution_image = CASE WHEN ? != '' THEN ? ELSE resolution_image END,
+                    resolution_date = ?,
+                    resolved_time = CASE WHEN resolved_time IS NULL OR resolved_time = '' THEN ? ELSE resolved_time END
+                WHERE id = ?
+            """, (title, resolution, resolution_image_url, resolution_image_url, date_str, date_str, complaint_id))
+
+        conn.commit()
         conn.close()
 
         return jsonify({
