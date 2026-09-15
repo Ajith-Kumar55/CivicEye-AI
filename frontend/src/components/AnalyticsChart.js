@@ -41,13 +41,27 @@ function AnalyticsChart({ history = [] }) {
     }));
 
 
-  const COLORS = [
-    "#06b6d4",
-    "#ef4444",
-    "#10b981",
-    "#f59e0b",
-    "#8b5cf6"
-  ];
+  const getCategoryColor = (rawCategory) => {
+    const normalized = String(rawCategory || "")
+      .toLowerCase()
+      .replace(/_/g, " ")
+      .trim();
+
+    if (normalized.includes("garbage")) {
+      return "#22C55E";
+    }
+    if (normalized.includes("water") || normalized.includes("leak")) {
+      return "#3B82F6";
+    }
+    if (normalized.includes("pothole")) {
+      return "#F59E0B";
+    }
+    if (normalized.includes("no issue")) {
+      return "#6B7280";
+    }
+
+    return "#6B7280";
+  };
 
 
   return (
@@ -156,12 +170,7 @@ function AnalyticsChart({ history = [] }) {
 
                       <Cell
                         key={`cell-${index}`}
-                        fill={
-                          COLORS[
-                            index %
-                            COLORS.length
-                          ]
-                        }
+                        fill={getCategoryColor(entry.name)}
                       />
 
                     )
@@ -246,14 +255,20 @@ function AnalyticsChart({ history = [] }) {
 
                 <Bar
                   dataKey="value"
-                  fill="#06b6d4"
                   radius={[
                     8,
                     8,
                     0,
                     0
                   ]}
-                />
+                >
+                  {chartData.map((entry, index) => (
+                    <Cell
+                      key={`bar-cell-${index}`}
+                      fill={getCategoryColor(entry.name)}
+                    />
+                  ))}
+                </Bar>
 
               </BarChart>
 

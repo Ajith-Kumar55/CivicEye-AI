@@ -29,17 +29,17 @@ L.Icon.Default.mergeOptions({
 // MAP CLICK
 // =====================================
 
-function MapClickHandler({ setPosition }) {
+function MapClickHandler({ setPosition, onLocationSelect }) {
 
   useMapEvents({
 
     click(e) {
-
-      setPosition([
-        e.latlng.lat,
-        e.latlng.lng,
-      ]);
-
+      const lat = e.latlng.lat;
+      const lng = e.latlng.lng;
+      setPosition([lat, lng]);
+      if (onLocationSelect) {
+        onLocationSelect(lat, lng);
+      }
     },
 
   });
@@ -84,6 +84,7 @@ function MapController({ position, moveMap }) {
 function GoogleMap({
   history = [],
   selectedLocation,
+  onLocationSelect,
 }) {
 
   const [position, setPosition] = useState([
@@ -91,9 +92,76 @@ function GoogleMap({
     77.5946,
   ]);
 
-  const [moveMap, setMoveMap] =
-    useState(false);
+  const [moveMap, setMoveMap] = useState(false);
+  const [locationError, setLocationError] = useState("");
 
+  const updatePosition = (lat, lng, shouldMove = false) => {
+    const latNum = Number(lat);
+    const lngNum = Number(lng);
+    setPosition([latNum, lngNum]);
+
+    if (shouldMove) {
+      setMoveMap(true);
+      setTimeout(() => {
+        setMoveMap(false);
+      }, 1500);
+    }
+
+    if (onLocationSelect) {
+      onLocationSelect(latNum, lngNum);
+    }
+  };
+
+  // =====================================
+  // CURRENT GPS LOCATION
+  // =====================================
+
+  const getLocation = () => {
+
+    setLocationError("");
+
+    if (!navigator.geolocation) {
+      setLocationError(
+        "Unable to access your current location. Please allow location access or select the location manually on the map."
+      );
+      return;
+    }
+
+
+    navigator.geolocation.getCurrentPosition(
+
+      (pos) => {
+
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        setLocationError("");
+        updatePosition(lat, lng, true);
+
+      },
+
+      (error) => {
+
+        setLocationError(
+          "Unable to access your current location. Please allow location access or select the location manually on the map."
+        );
+
+      },
+
+      {
+        enableHighAccuracy: true,
+        maximumAge: 0,
+        timeout: 15000,
+      }
+
+    );
+
+  };
+
+  // Request location on initialization
+  useEffect(() => {
+    getLocation();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // =====================================
   // LOCATION FROM COMPLAINT SEARCH
@@ -107,78 +175,12 @@ function GoogleMap({
       selectedLocation.lng !== undefined
     ) {
 
-      const newPosition = [
-        Number(selectedLocation.lat),
-        Number(selectedLocation.lng),
-      ];
-
-      setPosition(newPosition);
-
-      setMoveMap(true);
-
-      setTimeout(() => {
-        setMoveMap(false);
-      }, 1500);
+      updatePosition(selectedLocation.lat, selectedLocation.lng, true);
 
     }
 
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedLocation]);
-
-
-  // =====================================
-  // CURRENT GPS LOCATION
-  // =====================================
-
-  const getLocation = () => {
-
-    if (!navigator.geolocation) {
-
-      alert(
-        "Geolocation is not supported by this browser."
-      );
-
-      return;
-    }
-
-
-    navigator.geolocation.getCurrentPosition(
-
-      (pos) => {
-
-        const newPosition = [
-          pos.coords.latitude,
-          pos.coords.longitude,
-        ];
-
-        setPosition(newPosition);
-
-        setMoveMap(true);
-
-        setTimeout(() => {
-          setMoveMap(false);
-        }, 1500);
-
-      },
-
-      (error) => {
-
-        console.log(error);
-
-        alert(
-          "Unable to get your current location. Please allow location permission."
-        );
-
-      },
-
-      {
-        enableHighAccuracy: true,
-        timeout: 20000,
-        maximumAge: 0,
-      }
-
-    );
-
-  };
 
 
   // =====================================
@@ -291,11 +293,31 @@ function GoogleMap({
 
           <FaLocationArrow />
 
-          Get Current Location
+          Use Current Location
 
         </button>
 
       </div>
+
+
+      {/* LOCATION ERROR BANNER */}
+
+      {locationError && (
+        <div
+          style={{
+            background: "#7f1d1d",
+            border: "1px solid #ef4444",
+            color: "#fca5a5",
+            padding: "12px 16px",
+            borderRadius: "10px",
+            marginBottom: "20px",
+            fontSize: "14px",
+            textAlign: "center"
+          }}
+        >
+          ⚠️ {locationError}
+        </div>
+      )}
 
 
       {/* COORDINATES */}
@@ -386,6 +408,7 @@ function GoogleMap({
 
         <MapClickHandler
           setPosition={setPosition}
+          onLocationSelect={onLocationSelect}
         />
 
 
@@ -417,10 +440,7 @@ function GoogleMap({
               const latLng =
                 marker.getLatLng();
 
-              setPosition([
-                latLng.lat,
-                latLng.lng,
-              ]);
+              updatePosition(latLng.lat, latLng.lng, false);
 
             },
 

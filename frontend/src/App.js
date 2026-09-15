@@ -1132,6 +1132,9 @@ return (
   <GoogleMap
     history={history}
     selectedLocation={selectedLocation}
+    onLocationSelect={(lat, lng) => {
+      setComplaintLocation(`${lat.toFixed(6)}, ${lng.toFixed(6)}`);
+    }}
   />
 
   <br />

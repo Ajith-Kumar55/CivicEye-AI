@@ -47,6 +47,12 @@ function Login({ onLogin }) {
 
     // Municipality Admin Verification via Backend API
     if (role === "admin") {
+      let authSuccess = false;
+      let adminToken = "";
+      let adminUser = null;
+      let errorMessage = "";
+
+      // 1. Try Primary Backend URL
       try {
         const response = await fetch(`${API_BASE_URL}/api/login`, {
           method: "POST",
@@ -63,25 +69,53 @@ function Login({ onLogin }) {
         const data = await response.json();
 
         if (response.ok && data.success && data.role === "admin") {
-          if (rememberMe) {
-            localStorage.setItem("rememberEmail", loginData.email);
-          }
-          sessionStorage.setItem("civiceye_admin_token", data.token);
-          sessionStorage.setItem("civiceye_role", "admin");
-
-          if (typeof onLogin === "function") {
-            onLogin("admin", data.user);
-          }
-          setLoading(false);
-          return;
+          authSuccess = true;
+          adminToken = data.token;
+          adminUser = data.user || { name: "Municipality Administrator", email: loginData.email };
         } else {
-          alert(data.error || "Invalid Municipality Admin credentials.");
-          setLoading(false);
-          return;
+          errorMessage = data.error || "Invalid Municipality Admin credentials.";
         }
       } catch (err) {
-        console.error("Admin Login Error:", err);
-        alert("Authentication server unreachable. Please make sure Flask backend is running.");
+        console.warn("Primary API Login fetch notice, trying local backend API:", err);
+
+        // 2. Try Local Backend URL (http://127.0.0.1:5000)
+        try {
+          const localRes = await fetch("http://127.0.0.1:5000/api/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              email: loginData.email,
+              password: loginData.password,
+              role: "admin"
+            })
+          });
+          const localData = await localRes.json();
+          if (localRes.ok && localData.success && localData.role === "admin") {
+            authSuccess = true;
+            adminToken = localData.token;
+            adminUser = localData.user || { name: "Municipality Administrator", email: loginData.email };
+          } else {
+            errorMessage = localData.error || "Invalid Municipality Admin credentials.";
+          }
+        } catch (localErr) {
+          errorMessage = "Unable to connect to authentication server. Please check your connection.";
+        }
+      }
+
+      if (authSuccess) {
+        if (rememberMe) {
+          localStorage.setItem("rememberEmail", loginData.email);
+        }
+        sessionStorage.setItem("civiceye_admin_token", adminToken);
+        sessionStorage.setItem("civiceye_role", "admin");
+
+        if (typeof onLogin === "function") {
+          onLogin("admin", adminUser);
+        }
+        setLoading(false);
+        return;
+      } else {
+        alert(errorMessage || "Invalid Municipality Admin credentials.");
         setLoading(false);
         return;
       }
