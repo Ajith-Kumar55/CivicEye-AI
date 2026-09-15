@@ -406,7 +406,7 @@ def detect():
             return jsonify({"error": "No file selected"}), 400
 
         # -------------------------
-        # SAVE UPLOADED IMAGE (MAX 10MB)
+        # SAVE UPLOADED IMAGE (MAX 10MB) & PREPROCESS (CAP MAX DIM 1280)
         # -------------------------
         filename = os.path.basename(file.filename)
         filepath = os.path.join(UPLOAD_FOLDER, filename)
@@ -416,11 +416,11 @@ def detect():
         try:
             with Image.open(file.stream) as img:
                 img_w, img_h = img.size
-                max_dim = 320
+                max_dim = 1280
                 if max(img_w, img_h) > max_dim:
                     with img.convert("RGB") as img_rgb:
                         img_rgb.thumbnail((max_dim, max_dim), Image.Resampling.BILINEAR)
-                        img_rgb.save(filepath, format="JPEG", quality=75)
+                        img_rgb.save(filepath, format="JPEG", quality=85)
                 else:
                     file.stream.seek(0)
                     file.save(filepath)
@@ -433,16 +433,12 @@ def detect():
             file.save(filepath)
 
         file_size = os.path.getsize(filepath)
-        print(f"[detect] file processed: {filename} ({file_size} bytes)")
+        prep_time = time.time() - prep_start
+        print(f"[detect] file processed: {filename} ({file_size} bytes) in {prep_time:.3f}s")
 
         if file_size > 10 * 1024 * 1024:
             os.remove(filepath)
             return jsonify({"error": "Uploaded image exceeds 10MB limit"}), 400
-
-        prep_time = time.time() - prep_start
-        print(f"[detect] preprocessing finished in {prep_time:.2f}s")
-
-        trim_memory()
 
         # -------------------------
         # RUN YOLO INFERENCE (LAZY MODEL GETTER, CPU, IMGSZ=320, CONF=0.25)
@@ -450,7 +446,7 @@ def detect():
         model_start = time.time()
         yolo_model = get_model()
         model_time = time.time() - model_start
-        print(f"[detect] model ready ({model_time:.2f}s)")
+        print(f"[detect] model ready ({model_time:.3f}s)")
 
         print("[detect] inference started")
         inf_start = time.time()
@@ -477,10 +473,45 @@ def detect():
             except Exception:
                 pass
         inf_duration = time.time() - inf_start
-        print(f"[detect] inference finished in {inf_duration:.2f}s")
-        trim_memory()
+        print(f"[detect] inference finished in {inf_duration:.3f}s")
 
+        # -------------------------
+        # PRE-CALCULATE FACE CASCADE ONCE PER IMAGE
+        # -------------------------
         filter_start = time.time()
+        has_prominent_face = False
+        has_large_face = False
+        face_indicator = "No face"
+
+        if cv2 is not None and FACE_CASCADE is not None and not FACE_CASCADE.empty():
+            try:
+                cv_img = cv2.imread(filepath)
+                if cv_img is not None:
+                    c_h, c_w = cv_img.shape[:2]
+                    c_area = c_h * c_w
+                    gray = cv2.cvtColor(cv_img, cv2.COLOR_BGR2GRAY)
+                    faces = FACE_CASCADE.detectMultiScale(
+                        gray, scaleFactor=1.1, minNeighbors=4, minSize=(30, 30)
+                    )
+                    if len(faces) > 0:
+                        for (fx, fy, fw, fh) in faces:
+                            f_area_ratio = (fw * fh) / c_area if c_area > 0 else 0
+                            f_h_ratio = fh / c_h if c_h > 0 else 0
+                            f_w_ratio = fw / c_w if c_w > 0 else 0
+                            if f_area_ratio >= 0.05 or f_h_ratio >= 0.22 or f_w_ratio >= 0.22:
+                                has_large_face = True
+                                has_prominent_face = True
+                                face_indicator = f"large_face (area_ratio={f_area_ratio:.3f}, h_ratio={f_h_ratio:.2f})"
+                                break
+                            elif f_area_ratio >= 0.015 or f_h_ratio >= 0.10 or f_w_ratio >= 0.10:
+                                has_prominent_face = True
+                                face_indicator = f"prominent_face (area_ratio={f_area_ratio:.3f}, h_ratio={f_h_ratio:.2f})"
+                                break
+                        if not has_prominent_face:
+                            face_indicator = f"small_background_face ({len(faces)} faces)"
+            except Exception as face_err:
+                face_indicator = f"face_detection_error ({face_err})"
+
         detections = []
         valid_results = []
 
@@ -537,38 +568,6 @@ def detect():
                 # -------------------------
                 suspicious_detection = False
                 reject_reason = "None"
-                face_indicator = "No face"
-
-                # Lightweight OpenCV face detection
-                has_prominent_face = False
-                has_large_face = False
-
-                if cv2 is not None and FACE_CASCADE is not None and not FACE_CASCADE.empty():
-                    try:
-                        cv_img = cv2.imread(filepath)
-                        if cv_img is not None:
-                            gray = cv2.cvtColor(cv_img, cv2.COLOR_BGR2GRAY)
-                            faces = FACE_CASCADE.detectMultiScale(
-                                gray, scaleFactor=1.1, minNeighbors=4, minSize=(30, 30)
-                            )
-                            if len(faces) > 0:
-                                for (fx, fy, fw, fh) in faces:
-                                    f_area_ratio = (fw * fh) / image_area if image_area > 0 else 0
-                                    f_h_ratio = fh / image_height if image_height > 0 else 0
-                                    f_w_ratio = fw / image_width if image_width > 0 else 0
-                                    if f_area_ratio >= 0.05 or f_h_ratio >= 0.22 or f_w_ratio >= 0.22:
-                                        has_large_face = True
-                                        has_prominent_face = True
-                                        face_indicator = f"large_face (area_ratio={f_area_ratio:.3f}, h_ratio={f_h_ratio:.2f})"
-                                        break
-                                    elif f_area_ratio >= 0.015 or f_h_ratio >= 0.10 or f_w_ratio >= 0.10:
-                                        has_prominent_face = True
-                                        face_indicator = f"prominent_face (area_ratio={f_area_ratio:.3f}, h_ratio={f_h_ratio:.2f})"
-                                        break
-                                if not has_prominent_face:
-                                    face_indicator = f"small_background_face ({len(faces)} faces)"
-                    except Exception as face_err:
-                        face_indicator = f"face_detection_error ({face_err})"
 
                 # -------------------------
                 # VALIDATION RULES
@@ -633,11 +632,12 @@ def detect():
                     valid_results.append(result)
 
         filter_time = time.time() - filter_start
-        print(f"[detect] filtering finished in {filter_time:.2f}s")
+        print(f"[detect] filtering finished in {filter_time:.3f}s")
 
         # -------------------------
         # CREATE PREDICTION FOLDER
         # -------------------------
+        save_start = time.time()
         prediction_folder = os.path.join(
             PREDICT_FOLDER,
             "result"
@@ -717,11 +717,13 @@ def detect():
 
             detections.append(detection)
 
-        print(f"[detect] prediction image saved: {prediction_image}")
+        save_time = time.time() - save_start
+        print(f"[detect] prediction image saved: {prediction_image} ({save_time:.3f}s)")
 
         # -------------------------
         # SAVE HISTORY
         # -------------------------
+        db_start = time.time()
         strongest_detection = max(
             detections,
             key=lambda x: x["confidence"]
@@ -734,6 +736,7 @@ def detect():
         complaint_id = save_complaint_to_db(
             strongest_detection
         )
+        db_time = time.time() - db_start
 
         # -------------------------
         # PREDICTION URL (DYNAMIC HOST)
@@ -748,6 +751,9 @@ def detect():
             pass
 
         trim_memory()
+
+        total_time = time.time() - start_time
+        print(f"[detect] REQUEST COMPLETE in {total_time:.3f}s (prep={prep_time:.3f}s, inf={inf_duration:.3f}s, filter={filter_time:.3f}s, save={save_time:.3f}s, db={db_time:.3f}s)")
 
         # -------------------------
         # SEND RESPONSE
